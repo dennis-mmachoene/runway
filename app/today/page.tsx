@@ -12,6 +12,7 @@ import type { TransactionRow } from '@/lib/db/types';
 import { getLastSeen } from '@/lib/diff/last-seen';
 import { getDiffSummary } from '@/lib/diff/summary';
 import { buildGreeting } from '@/lib/diff/greeting';
+import { getPace } from '@/lib/pace/snapshot';
 import { LogBox } from './log-box';
 import { MarkSeen } from './mark-seen';
 
@@ -28,6 +29,7 @@ export default async function TodayPage() {
   const result = await getSafeToSpend(supabase);
   const lastSeen = await getLastSeen();
   const greeting = buildGreeting(await getDiffSummary(supabase, lastSeen, result));
+  const pace = await getPace(supabase);
   const { data: txData } = await supabase
     .from('transactions')
     .select('*')
@@ -52,6 +54,9 @@ export default async function TodayPage() {
         <div className="flex flex-col gap-1">
           <p className="text-sm">{greeting.headline}</p>
           {greeting.notable && <p className="text-sm text-muted-foreground">{greeting.notable}</p>}
+          {pace?.message && (
+            <p className={pace.speak ? 'text-sm' : 'text-sm text-muted-foreground'}>{pace.message}</p>
+          )}
         </div>
       )}
 
