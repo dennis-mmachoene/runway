@@ -46,7 +46,9 @@ Ordered by value per unit of risk:
 - **Phase 10 — Pace** (highest care: curve not line, median baseline, shut up early). ✅
 - **Phase 11 — Replay** (rank by surprise, commit to a verdict, end forward). ✅
 - **Phase 12 — Simulation / what-if** (stress test, reuses the same engine). ✅
-- **Phase 13 — AI analyst / ask-anything** (last, because it speaks most).
+- **Phase 13 — AI analyst / ask-anything** (last, because it speaks most). ✅
+
+**✅ Movement 3 (the Layers) complete — phases 9–13. Runway is finished.**
 
 ## The one test that governs everything
 

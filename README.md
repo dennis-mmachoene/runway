@@ -15,9 +15,20 @@ hit your floor on the 23rd."*
 
 ## Status
 
-**Movement 1 — the Spine — is complete (phases 0–7).** Next is the soak: live in
-it for one real income-to-income cycle, then the layers (pace, replay,
-simulation, audit, AI) earn their place. See [`ROADMAP.md`](./ROADMAP.md).
+**Runway is feature-complete — all phases (0–13) built and test-gated.** The
+spine (auth, schema, engine, money, logging, gauge, reconcile) plus all five
+layers (subscription audit, pace, replay, what-if, AI analyst). 52 unit tests
+green. See [`ROADMAP.md`](./ROADMAP.md) and [`SOAK.md`](./SOAK.md).
+
+Layers (Movement 3):
+
+| Phase | Layer |
+|-------|-------|
+| 9  | Subscription audit — names every recurring charge |
+| 10 | Pace — "faster than normal", curve-based, speaks only when sure |
+| 11 | Replay — the month's story, ranked by surprise |
+| 12 | What-if — two futures side by side, reusing the engine |
+| 13 | AI analyst — ask-anything, grounded only in your data |
 
 | # | Phase | State |
 |---|-------|-------|
