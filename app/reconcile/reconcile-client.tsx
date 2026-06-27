@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatZAR, formatDate } from '@/lib/format';
 
-const TYPES: LineType[] = ['spend', 'income', 'refund', 'transfer', 'cash_withdrawal'];
+const TYPES: LineType[] = ['spend', 'commitment', 'income', 'refund', 'transfer', 'cash_withdrawal'];
 const WITH_CATEGORY = new Set<LineType>(['spend', 'refund', 'cash_withdrawal']);
 const selectClass =
   'h-8 rounded-md border bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
@@ -60,8 +60,8 @@ export function ReconcileClient() {
       {result && (
         <Card>
           <CardContent className="p-4 text-sm">
-            Reconciled: {result.matched} matched, {result.inserted} added, {result.refunds} refunds,{' '}
-            {result.income} income, {result.transfersSkipped} transfers excluded.
+            Reconciled: {result.matched} matched, {result.inserted} added, {result.commitments} bills,{' '}
+            {result.refunds} refunds, {result.income} income, {result.transfersSkipped} transfers excluded.
           </CardContent>
         </Card>
       )}

@@ -51,7 +51,7 @@ export default async function TodayPage() {
       <MarkSeen />
 
       {result && (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1" aria-live="polite">
           <p className="text-sm">{greeting.headline}</p>
           {greeting.notable && <p className="text-sm text-muted-foreground">{greeting.notable}</p>}
           {pace?.message && (
@@ -77,7 +77,7 @@ export default async function TodayPage() {
           <CardHeader>
             <CardTitle>Safe to spend</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+          <CardContent className="flex flex-col gap-3" aria-live="polite">
             <p className="text-4xl font-semibold tracking-tight">{formatZAR(result.spendablePool)}</p>
             <p className="text-sm text-muted-foreground">
               {result.status === 'learning_pace' || !result.runwayDate
@@ -150,28 +150,28 @@ export default async function TodayPage() {
       )}
 
       <nav className="grid grid-cols-2 gap-3">
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="min-h-11">
           <Link href="/income">Income</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="min-h-11">
           <Link href="/commitments">Commitments</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="min-h-11">
           <Link href="/reconcile">Reconcile</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="min-h-11">
           <Link href="/settings">Settings</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="min-h-11">
           <Link href="/subscriptions">Subscriptions</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="min-h-11">
           <Link href="/replay">Replay</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="min-h-11">
           <Link href="/simulate">What-if</Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="min-h-11">
           <Link href="/ask">Ask</Link>
         </Button>
       </nav>

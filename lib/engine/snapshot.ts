@@ -72,19 +72,31 @@ export async function buildEngineInput(supabase: SupabaseClient): Promise<Engine
 
   const today = new Date();
   const daysElapsed = Math.max(1, Math.round((today.getTime() - new Date(startAt).getTime()) / MS_PER_DAY));
+  const engineTx = transactions.map((t) => ({
+    amount: Number(t.amount),
+    kind: t.kind,
+    loggedAt: new Date(t.logged_at),
+  }));
+
+  // Recent (trailing-window) flow rate, not a whole-cycle average — so an early,
+  // front-loaded cycle doesn't read pessimistically.
+  const WINDOW = 10;
+  const coveredDays = Math.min(WINDOW, daysElapsed);
+  const cutoffMs = today.getTime() - WINDOW * MS_PER_DAY;
+  const recentFlow = engineTx
+    .filter((t) => t.kind === 'flow' && t.loggedAt.getTime() >= cutoffMs)
+    .reduce((sum, t) => sum + t.amount, 0);
+  const flowRate = recentFlow > 0 ? Math.round((recentFlow / coveredDays) * 100) / 100 : null;
 
   const input: EngineInput = {
     today,
     confirmedIncome,
-    transactions: transactions.map((t) => ({
-      amount: Number(t.amount),
-      kind: t.kind,
-      loggedAt: new Date(t.logged_at),
-    })),
+    transactions: engineTx,
     monthlyCommitments,
     sinkingFunds,
     floor: Number(cycle.floor_amount),
-    flowRateWindowDays: daysElapsed,
+    openingBuffer: Number(cycle.opening_buffer ?? 0),
+    flowRate,
   };
 
   return input;

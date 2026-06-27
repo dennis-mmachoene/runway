@@ -81,8 +81,9 @@ export function computeSafeToSpend(input: EngineInput): EngineResult {
     input.sinkingFunds.reduce((sum, sf) => sum + perCycleReserve(sf), 0),
   );
 
+  const openingBuffer = input.openingBuffer ?? 0;
   const spendablePool = round2(
-    cashInHand - remainingCommitments - cycleReserve - input.floor,
+    cashInHand + openingBuffer - remainingCommitments - cycleReserve - input.floor,
   );
 
   const dailyFlowRate =

@@ -34,15 +34,18 @@ strong password — store it in your password manager). `.env.local` is gitignor
 
 ---
 
-## 3. Apply the database schema (Phase 2)
+## 3. Apply the database schema
 
-Run `supabase/migrations/0001_init.sql` against your project — either:
+Run **both** migrations in `supabase/migrations/` in order — either:
 
-- **SQL Editor:** Dashboard → SQL Editor → paste the file → Run, or
+- **SQL Editor:** Dashboard → SQL Editor → paste each file → Run, or
 - **CLI:** `supabase link` then `supabase db push`.
 
-This creates all tables, the flat `category` enum, and Row Level Security scoped
-to `auth.uid()` on every table.
+- `0001_init.sql` — all tables, the flat `category` enum, RLS scoped to
+  `auth.uid()` on every table.
+- `0002_audit_fixes.sql` — adds `cycles.opening_buffer` + `settings.emergency_fund`
+  and the `transition_cycle()` function that closes one cycle and opens the next
+  (with sinking accrual/payout and leftover) **atomically**.
 
 ---
 

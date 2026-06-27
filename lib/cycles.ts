@@ -8,6 +8,7 @@ const SETTINGS_DEFAULTS: Omit<Settings, "user_id"> = {
   lump_threshold: 1000,
   savings_mode: "automatic",
   leftover_mode: "sweep_emergency",
+  emergency_fund: 0,
 };
 
 export async function getSettings(

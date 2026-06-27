@@ -7,7 +7,7 @@ import type { Category } from '@/lib/categories';
  *  - transfer        → savings ↔ current; NEITHER income NOR spend (excluded)
  *  - cash_withdrawal → one outflow, attributed to category `cash`
  */
-export type LineType = 'spend' | 'income' | 'refund' | 'transfer' | 'cash_withdrawal';
+export type LineType = 'spend' | 'income' | 'refund' | 'transfer' | 'cash_withdrawal' | 'commitment';
 
 /** A parsed statement row. `amount` is signed: negative = outflow, positive = inflow. */
 export interface StatementLine {
@@ -22,6 +22,8 @@ export interface AnalyzedLine extends StatementLine {
   type: LineType;
   category: Category;
   matchedTxId: string | null;
+  /** Set when a debit is matched to a known commitment (writes commitment_id). */
+  commitmentId?: string | null;
 }
 
 /** Minimal log shape the matcher needs. */

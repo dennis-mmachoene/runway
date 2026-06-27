@@ -2,16 +2,17 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import type { FormState } from '@/lib/forms';
 
 const SAVINGS = new Set(['automatic', 'best_effort']);
 const LEFTOVER = new Set(['sweep_emergency', 'roll_buffer']);
 
-export async function updateSettings(formData: FormData): Promise<void> {
+export async function updateSettings(formData: FormData): Promise<FormState> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { ok: false, error: 'Not signed in.' };
 
   const floorDefault = Number(formData.get('floor_default'));
   const lumpThreshold = Number(formData.get('lump_threshold'));
@@ -30,11 +31,10 @@ export async function updateSettings(formData: FormData): Promise<void> {
     .select('user_id')
     .eq('user_id', user.id)
     .maybeSingle();
-  if (existing) {
-    await supabase.from('settings').update(patch).eq('user_id', user.id);
-  } else {
-    await supabase.from('settings').insert({ user_id: user.id, ...patch });
-  }
+  const write = existing
+    ? await supabase.from('settings').update(patch).eq('user_id', user.id)
+    : await supabase.from('settings').insert({ user_id: user.id, ...patch });
+  if (write.error) return { ok: false, error: write.error.message };
 
   // Keep the open cycle's floor in step with the new default, so the gauge
   // reflects the change immediately during the soak.
@@ -42,4 +42,5 @@ export async function updateSettings(formData: FormData): Promise<void> {
 
   revalidatePath('/settings');
   revalidatePath('/today');
+  return { ok: true };
 }

@@ -7,7 +7,7 @@ import { getSettings } from '@/lib/cycles';
 import { parseStatementCsv } from './csv';
 import { classifyLine } from './classify';
 import { matchAll } from './match';
-import type { AnalyzedLine, MatchableLog } from './types';
+import type { AnalyzedLine, MatchableLog, StatementLine } from './types';
 
 async function loadUnreconciledLogs(supabase: SupabaseClient): Promise<MatchableLog[]> {
   const { data } = await supabase
@@ -19,13 +19,40 @@ async function loadUnreconciledLogs(supabase: SupabaseClient): Promise<Matchable
   return (data as MatchableLog[]) ?? [];
 }
 
+interface KnownCommitment {
+  id: string;
+  name: string;
+  amount: number;
+  variable_high: number | null;
+  cadence: string;
+}
+
+const SINKING = new Set(['annual', 'custom']);
+
+/** Match a debit line to a known commitment by amount (±10%) or a name hint. */
+function matchCommitment(line: StatementLine, commitments: KnownCommitment[]): KnownCommitment | null {
+  const target = Math.abs(line.amount);
+  const desc = line.description.toLowerCase();
+  let amountMatch: KnownCommitment | null = null;
+  for (const c of commitments) {
+    if (c.name.length > 2 && desc.includes(c.name.toLowerCase())) return c; // strongest signal
+    const expected = c.variable_high != null ? Number(c.variable_high) : Number(c.amount);
+    if (!amountMatch && Math.abs(expected - target) <= Math.max(5, expected * 0.1)) amountMatch = c;
+  }
+  return amountMatch;
+}
+
 /** Parse + classify + match a pasted statement CSV for owner review. */
 export async function analyzeReconcile(csv: string): Promise<AnalyzedLine[]> {
   const lines = parseStatementCsv(csv);
   if (!lines.length) return [];
 
   const supabase = await createClient();
-  const logs = await loadUnreconciledLogs(supabase);
+  const [logs, commitData] = await Promise.all([
+    loadUnreconciledLogs(supabase),
+    supabase.from('commitments').select('id, name, amount, variable_high, cadence').eq('is_active', true),
+  ]);
+  const commitments = (commitData.data as KnownCommitment[]) ?? [];
 
   const spend = lines.filter((l) => l.amount < 0);
   const spendMatches = matchAll(spend, logs);
@@ -33,8 +60,22 @@ export async function analyzeReconcile(csv: string): Promise<AnalyzedLine[]> {
 
   return lines.map((line, i) => {
     const { type, category } = classifyLine(line);
-    const matchedTxId = type === 'spend' ? (matchBySpendIndex.get(line) ?? null) : null;
-    return { id: String(i), ...line, type, category, matchedTxId };
+
+    // A debit that matches a known commitment is a bill payment, not generic
+    // spend — write commitment_id so the engine nets it to zero. Sinking bills
+    // are covered by their pot, so exclude them (treated as a transfer).
+    if (type === 'spend') {
+      const c = matchCommitment(line, commitments);
+      if (c && SINKING.has(c.cadence)) {
+        return { id: String(i), ...line, type: 'transfer', category, matchedTxId: null };
+      }
+      if (c) {
+        return { id: String(i), ...line, type: 'commitment', category: 'bills', matchedTxId: null, commitmentId: c.id };
+      }
+      return { id: String(i), ...line, type, category, matchedTxId: matchBySpendIndex.get(line) ?? null };
+    }
+
+    return { id: String(i), ...line, type, category, matchedTxId: null };
   });
 }
 
@@ -42,6 +83,7 @@ export interface ApplyResult {
   ok: boolean;
   matched: number;
   inserted: number;
+  commitments: number;
   refunds: number;
   transfersSkipped: number;
   income: number;
@@ -58,6 +100,7 @@ export async function applyReconcile(lines: AnalyzedLine[]): Promise<ApplyResult
     ok: true,
     matched: 0,
     inserted: 0,
+    commitments: 0,
     refunds: 0,
     transfersSkipped: 0,
     income: 0,
@@ -67,7 +110,6 @@ export async function applyReconcile(lines: AnalyzedLine[]): Promise<ApplyResult
     const magnitude = Math.abs(line.amount);
 
     if (line.type === 'transfer') {
-      // Neither income nor spend — exclude entirely.
       result.transfersSkipped++;
       continue;
     }
@@ -83,9 +125,23 @@ export async function applyReconcile(lines: AnalyzedLine[]): Promise<ApplyResult
       continue;
     }
 
+    if (line.type === 'commitment' && line.commitmentId) {
+      await supabase.from('transactions').insert({
+        raw_text: line.description,
+        amount: magnitude,
+        merchant: line.description || null,
+        category: 'bills',
+        kind: 'commitment',
+        commitment_id: line.commitmentId,
+        source: 'import',
+        is_reconciled: true,
+        logged_at: line.date,
+      });
+      result.commitments++;
+      continue;
+    }
+
     if (line.type === 'refund') {
-      // A credit that is NOT income: a negative spend that nets against its
-      // category. Logged "now" so a cross-cycle refund credits the CURRENT cycle.
       await supabase.from('transactions').insert({
         raw_text: line.description,
         amount: -magnitude,

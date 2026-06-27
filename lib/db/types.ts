@@ -58,6 +58,7 @@ export interface Cycle {
   end_at: string | null;
   status: CycleStatus;
   floor_amount: number;
+  opening_buffer: number;
   tag: string | null;
   created_at: string;
 }
@@ -68,4 +69,5 @@ export interface Settings {
   lump_threshold: number;
   savings_mode: SavingsMode;
   leftover_mode: LeftoverMode;
+  emergency_fund: number;
 }

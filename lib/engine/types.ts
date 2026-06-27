@@ -46,6 +46,8 @@ export interface EngineInput {
   sinkingFunds: SinkingFund[];
   /** The floor — safe-to-spend is what's left above it. */
   floor: number;
+  /** Leftover rolled in from the previous cycle (leftover_mode = roll_buffer). */
+  openingBuffer?: number;
   /**
    * Window (in days) over which the recent flow rate is averaged. Used only when
    * `flowRate` is not supplied. Must be > 0 to produce a rate.
