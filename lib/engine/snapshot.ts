@@ -23,11 +23,11 @@ function cyclesUntilDue(dueDate: string | null): number {
 }
 
 /**
- * Assemble the engine input from the open cycle and run it. Returns null if
- * there is no open cycle yet (no confirmed income) — the UI then prompts to
- * add income rather than showing a fabricated number.
+ * Assemble the engine input from the open cycle. Returns null if there is no
+ * open cycle yet. Exported so simulation can reuse the EXACT same input the live
+ * gauge runs on — a scenario can never contradict the live number.
  */
-export async function getSafeToSpend(supabase: SupabaseClient): Promise<EngineResult | null> {
+export async function buildEngineInput(supabase: SupabaseClient): Promise<EngineInput | null> {
   const cycle = await getOpenCycle(supabase);
   if (!cycle || !cycle.start_at) return null;
 
@@ -87,5 +87,11 @@ export async function getSafeToSpend(supabase: SupabaseClient): Promise<EngineRe
     flowRateWindowDays: daysElapsed,
   };
 
-  return computeSafeToSpend(input);
+  return input;
+}
+
+/** The live safe-to-spend result, or null when there's no open cycle. */
+export async function getSafeToSpend(supabase: SupabaseClient): Promise<EngineResult | null> {
+  const input = await buildEngineInput(supabase);
+  return input ? computeSafeToSpend(input) : null;
 }

@@ -168,6 +168,9 @@ export default async function TodayPage() {
         <Button asChild variant="outline">
           <Link href="/replay">Replay</Link>
         </Button>
+        <Button asChild variant="outline" className="col-span-2">
+          <Link href="/simulate">What-if</Link>
+        </Button>
       </nav>
     </main>
   );

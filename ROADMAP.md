@@ -45,7 +45,7 @@ Ordered by value per unit of risk:
 - **Phase 9 — Subscription audit** (cheapest win). ✅
 - **Phase 10 — Pace** (highest care: curve not line, median baseline, shut up early). ✅
 - **Phase 11 — Replay** (rank by surprise, commit to a verdict, end forward). ✅
-- **Phase 12 — Simulation / what-if** (stress test, reuses the same engine).
+- **Phase 12 — Simulation / what-if** (stress test, reuses the same engine). ✅
 - **Phase 13 — AI analyst / ask-anything** (last, because it speaks most).
 
 ## The one test that governs everything
