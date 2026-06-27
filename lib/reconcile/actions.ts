@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
-import { getSettings } from '@/lib/cycles';
+import { getSettings, getOpenCycle } from '@/lib/cycles';
 import { parseStatementCsv } from './csv';
 import { classifyLine } from './classify';
 import { matchAll } from './match';
@@ -96,6 +96,31 @@ export async function applyReconcile(lines: AnalyzedLine[]): Promise<ApplyResult
   const lumpThreshold = settings.lump_threshold ?? 1000;
   const nowIso = new Date().toISOString();
 
+  // Idempotency guards (N1, N3): a commitment is settled once per open cycle,
+  // and an imported income line that duplicates an existing one (amount + date)
+  // is skipped — so re-importing a statement never double-counts.
+  const open = await getOpenCycle(supabase);
+  const cycleStart = open?.start_at ?? null;
+  const settled = new Set<string>();
+  const incomeKeys = new Set<string>();
+  if (cycleStart) {
+    const { data } = await supabase
+      .from('transactions')
+      .select('commitment_id')
+      .eq('kind', 'commitment')
+      .gte('logged_at', cycleStart);
+    for (const r of (data as { commitment_id: string | null }[]) ?? []) {
+      if (r.commitment_id) settled.add(r.commitment_id);
+    }
+  }
+  {
+    const since = cycleStart ?? new Date(Date.now() - 120 * 86_400_000).toISOString();
+    const { data } = await supabase.from('income_events').select('amount, event_at').gte('event_at', since);
+    for (const r of (data as { amount: number; event_at: string }[]) ?? []) {
+      incomeKeys.add(`${Number(r.amount)}|${r.event_at.slice(0, 10)}`);
+    }
+  }
+
   const result: ApplyResult = {
     ok: true,
     matched: 0,
@@ -115,17 +140,21 @@ export async function applyReconcile(lines: AnalyzedLine[]): Promise<ApplyResult
     }
 
     if (line.type === 'income') {
+      const key = `${magnitude}|${line.date}`;
+      if (incomeKeys.has(key)) continue; // N3 — already recorded
       await supabase.from('income_events').insert({
         amount: magnitude,
         event_at: line.date,
         is_confirmed: true,
         source: line.description || 'Statement',
       });
+      incomeKeys.add(key);
       result.income++;
       continue;
     }
 
     if (line.type === 'commitment' && line.commitmentId) {
+      if (settled.has(line.commitmentId)) continue; // N1 — already settled this cycle
       await supabase.from('transactions').insert({
         raw_text: line.description,
         amount: magnitude,
@@ -137,6 +166,7 @@ export async function applyReconcile(lines: AnalyzedLine[]): Promise<ApplyResult
         is_reconciled: true,
         logged_at: line.date,
       });
+      settled.add(line.commitmentId);
       result.commitments++;
       continue;
     }

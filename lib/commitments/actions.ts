@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getOpenCycle } from '@/lib/cycles';
 import type { FormState } from '@/lib/forms';
 
 export async function addCommitment(formData: FormData): Promise<FormState> {
@@ -51,6 +52,21 @@ export async function payCommitment(formData: FormData): Promise<FormState> {
   const cadence = (c as { cadence: string }).cadence;
   if (cadence === 'annual' || cadence === 'custom') {
     return { ok: false, error: 'Sinking funds settle automatically at cycle close.' };
+  }
+
+  // Idempotency (N1): a commitment is settled at most once per open cycle, so a
+  // double-tap (or settling after reconcile already did) can't hit cash twice.
+  const open = await getOpenCycle(supabase);
+  if (open?.start_at) {
+    const { data: already } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('kind', 'commitment')
+      .eq('commitment_id', id)
+      .gte('logged_at', open.start_at)
+      .limit(1)
+      .maybeSingle();
+    if (already) return { ok: false, error: 'Already settled this cycle.' };
   }
 
   const { error } = await supabase.from('transactions').insert({

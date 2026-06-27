@@ -112,6 +112,7 @@ export function CommitmentsClient({
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="min-h-11"
                     disabled={pending}
                     onClick={() => {
                       const fd = new FormData();
@@ -132,8 +133,8 @@ export function CommitmentsClient({
                     className="flex items-center gap-2"
                   >
                     <input type="hidden" name="id" value={c.id} />
-                    <Input name="amount" type="number" step="0.01" min="0" defaultValue={reserve} className="h-8" />
-                    <Button size="sm" type="submit" disabled={pending}>
+                    <Input name="amount" type="number" step="0.01" min="0" defaultValue={reserve} className="h-11" />
+                    <Button size="sm" type="submit" className="min-h-11" disabled={pending}>
                       Pay
                     </Button>
                   </form>

@@ -17,7 +17,7 @@ import { LogBox } from './log-box';
 import { MarkSeen } from './mark-seen';
 
 const selectClass =
-  'h-8 rounded-md border bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
+  'h-11 rounded-md border bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]';
 
 export default async function TodayPage() {
   const supabase = await createClient();
@@ -78,7 +78,12 @@ export default async function TodayPage() {
             <CardTitle>Safe to spend</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3" aria-live="polite">
-            <p className="text-4xl font-semibold tracking-tight">{formatZAR(result.spendablePool)}</p>
+            <p
+              className="text-4xl font-semibold tracking-tight"
+              aria-label={`Safe to spend ${formatZAR(result.spendablePool)}`}
+            >
+              {formatZAR(result.spendablePool)}
+            </p>
             <p className="text-sm text-muted-foreground">
               {result.status === 'learning_pace' || !result.runwayDate
                 ? 'Still learning your pace.'
@@ -132,13 +137,13 @@ export default async function TodayPage() {
                       <input type="checkbox" name="remember" className="size-3.5" />
                       remember
                     </label>
-                    <Button size="sm" variant="outline" type="submit">
+                    <Button size="sm" variant="outline" type="submit" className="min-h-11">
                       Save
                     </Button>
                   </form>
                   <form action={deleteTransaction}>
                     <input type="hidden" name="id" value={t.id} />
-                    <Button size="sm" variant="ghost" type="submit" aria-label="Delete">
+                    <Button size="sm" variant="ghost" type="submit" aria-label="Delete" className="min-h-11">
                       ×
                     </Button>
                   </form>

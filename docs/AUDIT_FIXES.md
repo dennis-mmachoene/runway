@@ -16,3 +16,12 @@ All eight findings from the static audit, addressed.
 The four engine invariants still hold (verified) — net-zero fixed commitment, sinking steady, variable-return, lump level-not-rate — now with the buffer in the formula.
 
 > Requires migration `0002_audit_fixes.sql` to be applied.
+
+## Re-audit (v2) follow-ups
+
+| # | Finding | What changed |
+|---|---------|--------------|
+| N1 | **Duplicate commitment settlement** — a bill settled by both the manual Pay and reconcile hit cash twice (understating safe-to-spend). | Settlement is now idempotent per (commitment, open cycle): `payCommitment` refuses if a commitment-tx already exists this cycle; reconcile preloads already-settled commitment ids and skips them (and dedupes within the batch). |
+| N3 | Reconcile could insert an income line duplicating a salary already recorded. | Reconcile preloads existing income keyed by amount + date and skips duplicates (also within the batch). |
+| N2 | Residual accessibility — some 32–36px tap targets; light SR coverage on the hero. | Recent-row + commitments controls and the inline selects raised to 44px (`h-11`/`min-h-11`); the safe-to-spend number now carries an `aria-label`. |
+
