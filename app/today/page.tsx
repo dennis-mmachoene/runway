@@ -144,15 +144,18 @@ export default async function TodayPage() {
         </div>
       )}
 
-      <nav className="flex gap-3">
-        <Button asChild variant="outline" className="flex-1">
+      <nav className="grid grid-cols-2 gap-3">
+        <Button asChild variant="outline">
           <Link href="/income">Income</Link>
         </Button>
-        <Button asChild variant="outline" className="flex-1">
+        <Button asChild variant="outline">
           <Link href="/commitments">Commitments</Link>
         </Button>
-        <Button asChild variant="outline" className="flex-1">
+        <Button asChild variant="outline">
           <Link href="/reconcile">Reconcile</Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/settings">Settings</Link>
         </Button>
       </nav>
     </main>
