@@ -23,13 +23,15 @@ are in and none can make the hero number lie. That is the hard stop.
 - **Phase 3 — Engine.** Safe-to-spend as a pure, tested function. *Done: the four
   invariant tests are green before any UI.* ✅
 - **Phase 4 — Money in/out.** Income + commitments CRUD (monthly + sinking-fund).
-  *Done: both commitment paths feed the engine.*
+  *Done: both commitment paths feed the engine.* ✅
 - **Phase 5 — Logging.** Deterministic parse first, Gemini fallback, alias
-  learning. *Done: a log takes seconds and never hard-fails.*
+  learning. *Done: a log takes seconds and never hard-fails.* ✅
 - **Phase 6 — Gauge.** The diff greeting. *Done: open shows what changed, never a
-  ledger.*
+  ledger.* ✅
 - **Phase 7 — Reconcile.** CSV import + matching + cash/refund/transfer rules.
-  *Done: statement corrects the month; refunds & transfers aren't income.*
+  *Done: statement corrects the month; refunds & transfers aren't income.* ✅
+
+**✅ Movement 1 (the Spine) complete — phases 0–7.**
 
 ## Movement 2 — The Soak
 
