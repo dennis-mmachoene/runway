@@ -157,6 +157,9 @@ export default async function TodayPage() {
         <Button asChild variant="outline">
           <Link href="/settings">Settings</Link>
         </Button>
+        <Button asChild variant="outline" className="col-span-2">
+          <Link href="/subscriptions">Subscriptions</Link>
+        </Button>
       </nav>
     </main>
   );
