@@ -1,9 +1,8 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getOpenCycle } from '@/lib/cycles';
-import { Button } from '@/components/ui/button';
 import type { Commitment } from '@/lib/db/types';
+import { AppShell } from '@/components/app-shell';
 import { CommitmentsClient } from './commitments-client';
 
 export default async function CommitmentsPage() {
@@ -20,7 +19,6 @@ export default async function CommitmentsPage() {
     .order('created_at', { ascending: false });
   const commitments = (data as Commitment[]) ?? [];
 
-  // Which commitments are already paid in the open cycle (have a commitment-tx).
   let paidIds: string[] = [];
   const open = await getOpenCycle(supabase);
   if (open?.start_at) {
@@ -35,14 +33,8 @@ export default async function CommitmentsPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/today">← Back</Link>
-        </Button>
-        <h1 className="text-sm font-medium text-muted-foreground">Commitments</h1>
-      </header>
+    <AppShell title="Commitments">
       <CommitmentsClient commitments={commitments} paidIds={paidIds} />
-    </main>
+    </AppShell>
   );
 }

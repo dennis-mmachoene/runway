@@ -9,7 +9,7 @@ export async function askAnalyst(question: string, contextJson: string): Promise
   try {
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const res = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.1-flash-lite',
       contents: buildAnalystPrompt(question, contextJson),
     });
     return res.text?.trim() || "I couldn't find that in your data.";

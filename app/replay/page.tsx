@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getReplay } from '@/lib/replay/snapshot';
-import { Button } from '@/components/ui/button';
+import { AppShell } from '@/components/app-shell';
+import { EmptyState } from '@/components/empty-state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/format';
 
@@ -16,25 +16,13 @@ export default async function ReplayPage() {
   const replay = await getReplay(supabase);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/today">← Back</Link>
-        </Button>
-        <h1 className="text-sm font-medium text-muted-foreground">Replay</h1>
-      </header>
-
+    <AppShell title="Replay">
       {!replay ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No closed cycle to replay yet</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            When your current cycle closes (your next confirmed income), its story lands here.
-          </CardContent>
-        </Card>
+        <EmptyState title="No closed cycle to replay yet">
+          When your current cycle closes (your next confirmed income), its story lands here.
+        </EmptyState>
       ) : (
-        <>
+        <div className="flex flex-col gap-6 animate-rise">
           <p className="text-xs text-muted-foreground">
             {formatDate(replay.cycleStart)} – {formatDate(replay.cycleEnd)}
           </p>
@@ -53,7 +41,9 @@ export default async function ReplayPage() {
               {replay.story.beats.map((b, i) => (
                 <Card key={i}>
                   <CardContent className="flex items-start gap-2 p-4 text-sm">
-                    <span aria-hidden>{b.direction === 'up' ? '▲' : '▼'}</span>
+                    <span aria-hidden className={b.direction === 'up' ? 'text-caution' : 'text-safe'}>
+                      {b.direction === 'up' ? '▲' : '▼'}
+                    </span>
                     <span>{b.text}</span>
                   </CardContent>
                 </Card>
@@ -66,8 +56,8 @@ export default async function ReplayPage() {
             <p className="text-muted-foreground">{replay.story.uncanny}</p>
             <p className="mt-2 font-medium">{replay.story.forward}</p>
           </div>
-        </>
+        </div>
       )}
-    </main>
+    </AppShell>
   );
 }

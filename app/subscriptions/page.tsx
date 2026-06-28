@@ -1,10 +1,11 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { detectSubscriptions, monthlyTotal, type SubscriptionInput } from '@/lib/subscriptions/detect';
-import { Button } from '@/components/ui/button';
+import { AppShell } from '@/components/app-shell';
+import { EmptyState } from '@/components/empty-state';
+import { Money } from '@/components/money';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatZAR, formatDate } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 
 export default async function SubscriptionsPage() {
   const supabase = await createClient();
@@ -22,35 +23,23 @@ export default async function SubscriptionsPage() {
   const total = monthlyTotal(subs);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/today">← Back</Link>
-        </Button>
-        <h1 className="text-sm font-medium text-muted-foreground">Subscriptions</h1>
-      </header>
-
+    <AppShell title="Subscriptions">
       {subs.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No recurring charges spotted yet</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            This finds same-merchant charges that repeat monthly. It needs a couple of cycles of
-            logged or reconciled spend before it can name them.
-          </CardContent>
-        </Card>
+        <EmptyState title="No recurring charges spotted yet">
+          This finds same-merchant charges that repeat monthly. It needs a couple of cycles of logged
+          or reconciled spend before it can name them.
+        </EmptyState>
       ) : (
-        <>
+        <div className="flex flex-col gap-4">
           <Card>
             <CardHeader>
-              <CardTitle>
+              <CardTitle className="tabular-nums">
                 {subs.length} recurring {subs.length === 1 ? 'charge' : 'charges'} ·{' '}
-                {formatZAR(total)}/month
+                <Money amount={total} />/month
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              That&apos;s {formatZAR(total * 12)} a year. Here they all are.
+              That&apos;s <Money amount={total * 12} /> a year. Here they all are.
             </CardContent>
           </Card>
 
@@ -65,15 +54,19 @@ export default async function SubscriptionsPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">{formatZAR(s.monthlyAmount)}/mo</p>
-                    <p className="text-xs text-muted-foreground">{formatZAR(s.monthlyAmount * 12)}/yr</p>
+                    <p className="font-medium">
+                      <Money amount={s.monthlyAmount} />/mo
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      <Money amount={s.monthlyAmount * 12} />/yr
+                    </p>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-        </>
+        </div>
       )}
-    </main>
+    </AppShell>
   );
 }
