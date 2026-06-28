@@ -2,7 +2,12 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { analyzeReconcile, applyReconcile, type ApplyResult } from '@/lib/reconcile/actions';
+import {
+  analyzeReconcile,
+  analyzeReconcileDocument,
+  applyReconcile,
+  type ApplyResult,
+} from '@/lib/reconcile/actions';
 import type { AnalyzedLine, LineType } from '@/lib/reconcile/types';
 import { CATEGORIES } from '@/lib/categories';
 import { Button } from '@/components/ui/button';
@@ -19,12 +24,28 @@ export function ReconcileClient() {
   const [csv, setCsv] = React.useState('');
   const [lines, setLines] = React.useState<AnalyzedLine[] | null>(null);
   const [result, setResult] = React.useState<ApplyResult | null>(null);
+  const [note, setNote] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
 
   function analyze() {
     setResult(null);
+    setNote(null);
     startTransition(async () => {
       setLines(await analyzeReconcile(csv));
+    });
+  }
+  function analyzeDoc(form: HTMLFormElement) {
+    setResult(null);
+    setNote(null);
+    const fd = new FormData(form);
+    startTransition(async () => {
+      const out = await analyzeReconcileDocument(fd);
+      if (!out.length) {
+        setNote("I couldn't read any transactions from that file — try a clearer scan, or paste the CSV.");
+      } else {
+        form.reset();
+        setLines(out);
+      }
     });
   }
   function apply() {
@@ -45,6 +66,30 @@ export function ReconcileClient() {
     <div className="flex flex-col gap-4">
       {!lines && (
         <>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              analyzeDoc(e.currentTarget);
+            }}
+            className="flex flex-col gap-2 rounded-md border p-3"
+          >
+            <p className="text-sm font-medium">Upload a statement</p>
+            <p className="text-xs text-muted-foreground">
+              A photo, scan or PDF — I&apos;ll read every line for you to review.
+            </p>
+            <input
+              type="file"
+              name="file"
+              accept="image/*,application/pdf"
+              required
+              className="text-sm"
+            />
+            <Button type="submit" disabled={pending} className="w-fit">
+              {pending ? 'Reading…' : 'Read statement'}
+            </Button>
+          </form>
+
+          <p className="text-xs text-muted-foreground">or paste a CSV</p>
           <textarea
             value={csv}
             onChange={(e) => setCsv(e.target.value)}
@@ -54,6 +99,7 @@ export function ReconcileClient() {
           <Button onClick={analyze} disabled={pending || !csv.trim()} className="w-fit">
             {pending ? 'Analyzing…' : 'Analyze'}
           </Button>
+          {note && <p className="text-sm text-muted-foreground" role="alert">{note}</p>}
         </>
       )}
 

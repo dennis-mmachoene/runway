@@ -12,35 +12,48 @@ export interface ExtractionResult {
 
 const COMMON = [
   'Read the attached document and return JSON ONLY (no prose, no code fences).',
-  'Amounts are South African Rand. Dates as ISO yyyy-mm-dd. Use the document\'s own date.',
+  'Amounts are South African Rand (the figure only, no "R" or thousands separators). Dates as ISO yyyy-mm-dd; use the document\'s own date, never today.',
   `category must be exactly one of: ${CATEGORIES.join(', ')}.`,
-  'Also return confidence_amount and confidence_date in 0..1 for how clearly you read each.',
+  'Set confidence_amount and confidence_date in 0..1 for how clearly you could read each. If a value is unclear, partly obscured, or you are inferring it, score it LOW — a wrong-but-confident read is worse than a low score that asks Dennis.',
 ].join('\n');
+
+const CATEGORY_HINTS =
+  'category guide: groceries=supermarkets/food shops; eating_out=restaurants/takeaways/cafes; transport=fuel/ride-hailing/parking/public transport; bills=utilities/telecoms/insurance/subscriptions; shopping=retail/clothing/electronics; health=pharmacy/medical/gym; entertainment=streaming/events/games; cash=ATM/cash withdrawal; other=anything that does not clearly fit. If genuinely unsure, use "other".';
 
 const PROMPTS: Record<DocumentKind, string> = {
   payslip: [
     COMMON,
-    'This is a payslip. Extract NET pay (take-home) as amount, pay date as date, employer as merchant.',
+    'This is a payslip. amount = NET pay / take-home (the final amount actually paid into the account) — NOT gross, NOT total earnings, NOT a deduction. Ignore gross, tax, UIF and other line items.',
+    'date = the pay date (when paid), not the period start/end. merchant = the employer name.',
+    'category is always "other" for a payslip; kind is always "flow".',
     'Shape: {"amount":number,"date":string,"merchant":string,"category":"other","kind":"flow","confidence_amount":number,"confidence_date":number}',
   ].join('\n'),
   receipt: [
     COMMON,
-    'This is a purchase receipt. Extract the total as amount, the merchant, and the date; guess the best category.',
+    'This is a purchase receipt. amount = the final TOTAL paid (VAT-inclusive grand total) — NOT a subtotal, NOT a single line item, NOT the change or cash tendered.',
+    'date = the purchase date/time on the receipt. merchant = the shop/business name (usually the header).',
+    CATEGORY_HINTS,
     'Shape: {"amount":number,"date":string,"merchant":string,"category":string,"kind":"flow","confidence_amount":number,"confidence_date":number}',
   ].join('\n'),
   invoice: [
     COMMON,
-    'This is an invoice. Extract the total as amount, the payee as merchant, and the date; guess the best category.',
+    'This is an invoice/bill. amount = the TOTAL AMOUNT DUE / balance payable (VAT-inclusive) — not a subtotal or a partial line.',
+    'date = the DUE date if present, otherwise the invoice/issue date. merchant = the biller/payee (who is owed).',
+    CATEGORY_HINTS,
     'Shape: {"amount":number,"date":string,"merchant":string,"category":string,"kind":"flow","confidence_amount":number,"confidence_date":number}',
   ].join('\n'),
+  // Statements are handled by the multi-line reconcile extractor, not here. This
+  // prompt is a defensive fallback if a single-line statement is ever routed in.
   statement: [
     COMMON,
-    'This is a bank statement. Extract the single most prominent line if asked; otherwise return the total debited.',
+    'This looks like a bank statement, but treat it as a single charge: extract the most prominent single debit as amount, its date, and its description as merchant.',
+    CATEGORY_HINTS,
     'Shape: {"amount":number,"date":string,"merchant":string,"category":string,"kind":"flow","confidence_amount":number,"confidence_date":number}',
   ].join('\n'),
   other: [
     COMMON,
-    'Extract the total as amount, who it was paid to as merchant, and the date; guess the best category.',
+    'amount = the total paid or due. merchant = who it was paid to / who issued it. date = the document\'s date.',
+    CATEGORY_HINTS,
     'Shape: {"amount":number,"date":string,"merchant":string,"category":string,"kind":"flow","confidence_amount":number,"confidence_date":number}',
   ].join('\n'),
 };

@@ -1,8 +1,10 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { uploadDocument, commitProposal, rejectProposal } from '@/lib/agent/actions';
+import type { DocPreview } from '@/lib/agent/previews';
 import type { ExtractionProposal } from '@/lib/db/types';
 import { CATEGORIES } from '@/lib/categories';
 import { Money } from '@/components/money';
@@ -26,11 +28,47 @@ function lowConf(c: number | undefined): boolean {
   return typeof c === 'number' && c < 0.85;
 }
 
-export function InboxClient({ proposals }: { proposals: ExtractionProposal[] }) {
+function DocThumb({ preview }: { preview: DocPreview | undefined }) {
+  if (!preview) return null;
+  if (preview.isImage) {
+    return (
+      <a href={preview.url} target="_blank" rel="noreferrer" className="shrink-0">
+        {/* signed, short-lived URL to a private document */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={preview.url}
+          alt={preview.name ?? 'Uploaded document'}
+          className="h-16 w-16 rounded-md border object-cover"
+        />
+      </a>
+    );
+  }
+  return (
+    <a
+      href={preview.url}
+      target="_blank"
+      rel="noreferrer"
+      className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-md border text-[10px] text-muted-foreground"
+    >
+      <span className="text-base">📄</span>
+      PDF
+    </a>
+  );
+}
+
+export function InboxClient({
+  proposals,
+  previews = {},
+}: {
+  proposals: ExtractionProposal[];
+  previews?: Record<string, DocPreview>;
+}) {
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
   const [note, setNote] = React.useState<string | null>(null);
+  const [docType, setDocType] = React.useState('receipt');
   const [pending, startTransition] = React.useTransition();
+  const isStatement = docType === 'statement';
 
   const waiting = proposals.filter((p) => p.status === 'pending');
   const done = proposals.filter((p) => p.status !== 'pending');
@@ -41,7 +79,9 @@ export function InboxClient({ proposals }: { proposals: ExtractionProposal[] }) 
     startTransition(async () => {
       const res = await uploadDocument(new FormData(form));
       if (!res.ok) setError(res.error);
-      else {
+      else if (res.action === 'statement') {
+        setNote('Bank statements are reviewed on Reconcile — head there to upload it.');
+      } else {
         setNote(res.action === 'auto_filed' ? 'Filed it — done.' : 'Read it. One quick question below.');
         form.reset();
         router.refresh();
@@ -72,10 +112,22 @@ export function InboxClient({ proposals }: { proposals: ExtractionProposal[] }) 
             }}
             className="flex flex-col gap-3"
           >
-            <input type="file" name="file" accept="image/*,application/pdf" required className="text-sm" />
+            <input
+              type="file"
+              name="file"
+              accept="image/*,application/pdf"
+              required={!isStatement}
+              disabled={isStatement}
+              className="text-sm disabled:opacity-50"
+            />
             <label className="text-xs text-muted-foreground">
               What is it?
-              <select name="doc_type" defaultValue="receipt" className={selectClass}>
+              <select
+                name="doc_type"
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
+                className={selectClass}
+              >
                 {DOC_TYPES.map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
@@ -83,9 +135,18 @@ export function InboxClient({ proposals }: { proposals: ExtractionProposal[] }) 
                 ))}
               </select>
             </label>
-            <Button type="submit" disabled={pending}>
-              {pending ? 'Reading…' : 'Upload'}
-            </Button>
+            {isStatement ? (
+              <div className="flex flex-col gap-2 rounded-md border border-dashed p-3 text-sm">
+                <p>A bank statement is many transactions — I review those line by line on Reconcile.</p>
+                <Button asChild variant="outline" className="w-fit">
+                  <Link href="/reconcile">Open Reconcile</Link>
+                </Button>
+              </div>
+            ) : (
+              <Button type="submit" disabled={pending}>
+                {pending ? 'Reading…' : 'Upload'}
+              </Button>
+            )}
           </form>
           {note && <p className="mt-2 text-sm text-muted-foreground">{note}</p>}
           {error && <p className="mt-2 text-sm text-destructive" role="alert">{error}</p>}
@@ -97,7 +158,9 @@ export function InboxClient({ proposals }: { proposals: ExtractionProposal[] }) 
           <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Needs a quick answer</h2>
           {waiting.map((p) => (
             <Card key={p.id}>
-              <CardContent className="flex flex-col gap-3 p-4">
+              <CardContent className="flex gap-3 p-4">
+                <DocThumb preview={previews[p.id]} />
+                <div className="flex min-w-0 flex-1 flex-col gap-3">
                 {p.question && <p className="text-sm">{p.question}</p>}
                 <form
                   onSubmit={(e) => {
@@ -152,6 +215,7 @@ export function InboxClient({ proposals }: { proposals: ExtractionProposal[] }) 
                     </Button>
                   </div>
                 </form>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -167,9 +231,19 @@ export function InboxClient({ proposals }: { proposals: ExtractionProposal[] }) 
                 {p.status === 'rejected' ? 'Discarded' : 'Filed'} {p.payload.merchant ?? p.doc_type}
                 {p.status === 'auto_filed' && <span className="text-muted-foreground"> · auto</span>}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
                 {p.payload.amount ? <Money amount={p.payload.amount} /> : null}
                 {p.payload.date ? ` · ${formatDate(p.payload.date)}` : ''}
+                {previews[p.id] && (
+                  <a
+                    href={previews[p.id].url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    view
+                  </a>
+                )}
               </span>
             </div>
           ))}

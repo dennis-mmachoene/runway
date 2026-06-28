@@ -7,6 +7,7 @@ import { getSettings, getOpenCycle } from '@/lib/cycles';
 import { parseStatementCsv } from './csv';
 import { classifyLine } from './classify';
 import { matchAll } from './match';
+import { extractStatementLines } from './extract';
 import type { AnalyzedLine, MatchableLog, StatementLine } from './types';
 
 async function loadUnreconciledLogs(supabase: SupabaseClient): Promise<MatchableLog[]> {
@@ -42,12 +43,14 @@ function matchCommitment(line: StatementLine, commitments: KnownCommitment[]): K
   return amountMatch;
 }
 
-/** Parse + classify + match a pasted statement CSV for owner review. */
-export async function analyzeReconcile(csv: string): Promise<AnalyzedLine[]> {
-  const lines = parseStatementCsv(csv);
+/** Classify + match already-parsed statement lines for owner review. Shared by
+ *  the CSV-paste path and the document-upload path so both behave identically. */
+async function analyzeLines(
+  supabase: SupabaseClient,
+  lines: StatementLine[],
+): Promise<AnalyzedLine[]> {
   if (!lines.length) return [];
 
-  const supabase = await createClient();
   const [logs, commitData] = await Promise.all([
     loadUnreconciledLogs(supabase),
     supabase.from('commitments').select('id, name, amount, variable_high, cadence').eq('is_active', true),
@@ -77,6 +80,31 @@ export async function analyzeReconcile(csv: string): Promise<AnalyzedLine[]> {
 
     return { id: String(i), ...line, type, category, matchedTxId: null };
   });
+}
+
+/** Parse + classify + match a pasted statement CSV for owner review. */
+export async function analyzeReconcile(csv: string): Promise<AnalyzedLine[]> {
+  const lines = parseStatementCsv(csv);
+  if (!lines.length) return [];
+  const supabase = await createClient();
+  return analyzeLines(supabase, lines);
+}
+
+/**
+ * Read an uploaded statement (image/PDF) with vision, then classify + match the
+ * lines for owner review — the upload route to the same reconcile table. Returns
+ * [] when nothing could be read, so the owner can fall back to pasting a CSV.
+ */
+export async function analyzeReconcileDocument(formData: FormData): Promise<AnalyzedLine[]> {
+  const file = formData.get('file') as File | null;
+  if (!file || file.size === 0) return [];
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const mime = file.type || 'application/octet-stream';
+  const base64 = Buffer.from(bytes).toString('base64');
+  const lines = await extractStatementLines(base64, mime);
+  if (!lines || !lines.length) return [];
+  const supabase = await createClient();
+  return analyzeLines(supabase, lines);
 }
 
 export interface ApplyResult {

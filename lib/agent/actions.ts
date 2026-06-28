@@ -16,7 +16,7 @@ import { onboardingTurn } from './onboarding';
 import type { OnboardingProposal, OnboardingTurn } from './onboarding-prompt';
 
 export type UploadResult =
-  | { ok: true; action: 'auto_filed' | 'ask' }
+  | { ok: true; action: 'auto_filed' | 'ask' | 'statement' }
   | { ok: false; error: string };
 
 function slugify(s: string): string {
@@ -107,6 +107,11 @@ export async function uploadDocument(formData: FormData): Promise<UploadResult> 
   const file = formData.get('file') as File | null;
   const docType = (String(formData.get('doc_type') || 'other') as DocumentKind) || 'other';
   if (!file || file.size === 0) return { ok: false, error: 'Choose a file to upload.' };
+
+  // A statement is many transactions, not one record — it belongs in Reconcile,
+  // where the owner reviews every line against the statement as the source of
+  // truth. Never file it as a single guessed transaction here.
+  if (docType === 'statement') return { ok: true, action: 'statement' };
 
   const supabase = await createClient();
   const {
