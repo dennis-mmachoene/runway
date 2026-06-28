@@ -11,7 +11,7 @@ export default async function AskPage() {
   if (!user) redirect('/');
 
   return (
-    <AppShell title="Ask">
+    <AppShell title="Chat">
       <AskClient />
     </AppShell>
   );

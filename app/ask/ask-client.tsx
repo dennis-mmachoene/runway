@@ -1,88 +1,105 @@
 'use client';
 
 import * as React from 'react';
-import { ask, observe } from '@/lib/analyst/actions';
+import { chat } from '@/lib/analyst/actions';
+import type { ChatMessage } from '@/lib/analyst/chat-prompt';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
-interface Turn {
-  q: string;
-  a: string;
-}
+const GREETING =
+  "Hi — I'm your Runway analyst. Ask about your money, or let's talk something through.";
 
 const SUGGESTIONS = [
-  'How much have I spent on coffee this year?',
-  'What are my biggest recurring charges?',
-  'When did I last replace my tyres?',
+  'How am I doing this cycle?',
+  'Where is most of my money going?',
+  'Give me one sharp observation.',
+  'Can I afford a R8 000 phone?',
 ];
 
 export function AskClient() {
-  const [question, setQuestion] = React.useState('');
-  const [turns, setTurns] = React.useState<Turn[]>([]);
+  const [messages, setMessages] = React.useState<ChatMessage[]>([
+    { role: 'assistant', text: GREETING },
+  ]);
+  const [input, setInput] = React.useState('');
   const [pending, startTransition] = React.useTransition();
+  const endRef = React.useRef<HTMLDivElement>(null);
 
-  function send(q: string) {
-    const query = q.trim();
-    if (!query) return;
-    setQuestion('');
-    startTransition(async () => {
-      const a = await ask(query);
-      setTurns((prev) => [{ q: query, a }, ...prev]);
-    });
-  }
+  React.useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, pending]);
 
-  function getObservation() {
+  function send(text: string) {
+    const t = text.trim();
+    if (!t || pending) return;
+    const next: ChatMessage[] = [...messages, { role: 'user', text: t }];
+    setMessages(next);
+    setInput('');
     startTransition(async () => {
-      const a = await observe();
-      setTurns((prev) => [{ q: 'An observation', a }, ...prev]);
+      const reply = await chat(next);
+      setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     });
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-[70vh] flex-col gap-4">
+      <div className="flex flex-1 flex-col gap-3">
+        {messages.map((m, i) => (
+          <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+            <div
+              className={cn(
+                'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm',
+                m.role === 'user'
+                  ? 'rounded-br-sm bg-primary text-primary-foreground'
+                  : 'rounded-bl-sm bg-secondary text-secondary-foreground',
+              )}
+            >
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {pending && (
+          <div className="flex justify-start">
+            <div className="rounded-2xl rounded-bl-sm bg-secondary px-3.5 py-2 text-sm text-muted-foreground">
+              thinking…
+            </div>
+          </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      {messages.length <= 1 && (
+        <div className="flex flex-wrap gap-2">
+          {SUGGESTIONS.map((s) => (
+            <Button key={s} variant="outline" size="sm" className="min-h-9" onClick={() => send(s)} disabled={pending}>
+              {s}
+            </Button>
+          ))}
+        </div>
+      )}
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          send(question);
+          send(input);
         }}
-        className="flex gap-2"
+        className="sticky bottom-20 flex gap-2 lg:bottom-2"
       >
         <Input
           autoFocus
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask anything about your money…"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Talk to your analyst…"
+          aria-label="Message"
         />
-        <Button type="submit" disabled={pending || !question.trim()}>
-          {pending ? '…' : 'Ask'}
+        <Button type="submit" disabled={pending || !input.trim()}>
+          Send
         </Button>
       </form>
 
-      <div className="flex flex-wrap gap-2">
-        {SUGGESTIONS.map((s) => (
-          <Button key={s} variant="outline" size="sm" onClick={() => send(s)} disabled={pending}>
-            {s}
-          </Button>
-        ))}
-        <Button variant="ghost" size="sm" onClick={getObservation} disabled={pending}>
-          Give me an observation
-        </Button>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {turns.map((t, i) => (
-          <Card key={i}>
-            <CardContent className="flex flex-col gap-1 p-4">
-              <p className="text-xs text-muted-foreground">{t.q}</p>
-              <p className="text-sm">{t.a}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       <p className="text-xs text-muted-foreground">
-        The analyst answers only from your data — if it&apos;s not in Runway, it&apos;ll say so.
+        Grounded in your data — money facts come from Runway; for big decisions, confirm
+        independently.
       </p>
     </div>
   );

@@ -52,7 +52,7 @@ const GROUPS: Group[] = [
     sub: [
       ['/replay', 'Replay'],
       ['/simulate', 'What-if'],
-      ['/ask', 'Ask'],
+      ['/ask', 'Chat'],
     ],
   },
 ];
