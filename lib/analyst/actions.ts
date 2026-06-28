@@ -4,16 +4,17 @@ import { createClient } from '@/lib/supabase/server';
 import { buildModelContext } from './context';
 import { askAnalyst } from './ask';
 import { chatWithAnalyst } from './chat';
-import type { ChatMessage } from './chat-prompt';
+import type { ChatMessage, ChatReply } from './chat-prompt';
 import { OBSERVATION_QUESTION } from './prompt';
 
-/** Multi-turn chat: send the running conversation, grounded in live data. */
-export async function chat(messages: ChatMessage[]): Promise<string> {
+/** Multi-turn chat: send the running conversation, grounded in live data. May
+ *  return a gated action proposal (the UI confirms before anything is written). */
+export async function chat(messages: ChatMessage[]): Promise<ChatReply> {
   const trimmed = messages.filter((m) => m.text.trim()).slice(-20); // cap history
   // Gemini requires the turn list to start with a user message.
   const firstUser = trimmed.findIndex((m) => m.role === 'user');
   const convo = firstUser >= 0 ? trimmed.slice(firstUser) : [];
-  if (!convo.length) return 'What would you like to talk through?';
+  if (!convo.length) return { reply: 'What would you like to talk through?', action: null };
   const supabase = await createClient();
   const ctx = await buildModelContext(supabase);
   return chatWithAnalyst(convo, JSON.stringify(ctx));

@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getSettings } from '@/lib/cycles';
+import { getSettings, getOpenCycle } from '@/lib/cycles';
+import { estimateCycleDays } from '@/lib/cycles/cadence';
 import { getSafeToSpend } from '@/lib/engine/snapshot';
 import { getPace } from '@/lib/pace/snapshot';
 import { getLastSeen } from '@/lib/diff/last-seen';
@@ -42,6 +43,30 @@ export default async function TodayPage() {
 
   const depleted = !!result && result.spendablePool <= 0;
   const learning = !result || result.status === 'learning_pace' || !result.runwayDate;
+
+  // The gauge's x-axis is "days until the next expected income" — derived from
+  // the user's own pay cadence, so the floor-crossing position is real, not
+  // pinned to the right edge. Cadence is an estimate; the gauge labels it so.
+  const MS_PER_DAY = 86_400_000;
+  let cycleDaysRemaining = 30;
+  let expectedEndDate: string | null = null;
+  if (result) {
+    const openCycle = await getOpenCycle(supabase);
+    const { data: cycleStartRows } = await supabase
+      .from('cycles')
+      .select('start_at')
+      .not('start_at', 'is', null);
+    const starts = ((cycleStartRows as { start_at: string }[] | null) ?? []).map((r) => r.start_at);
+    const cycleDays = estimateCycleDays(starts);
+    const startAt = openCycle?.start_at ? new Date(openCycle.start_at) : null;
+    const daysElapsed = startAt
+      ? Math.max(0, Math.round((Date.now() - startAt.getTime()) / MS_PER_DAY))
+      : 0;
+    cycleDaysRemaining = Math.max(1, cycleDays - daysElapsed);
+    expectedEndDate = startAt
+      ? new Date(startAt.getTime() + cycleDays * MS_PER_DAY).toISOString()
+      : null;
+  }
 
   return (
     <AppShell title="Today">
@@ -98,6 +123,9 @@ export default async function TodayPage() {
                 pool={result.spendablePool}
                 floor={result.floor}
                 runwayDate={result.runwayDate ? result.runwayDate.toISOString() : null}
+                runwayDays={result.runwayDays}
+                cycleDaysRemaining={cycleDaysRemaining}
+                expectedEndDate={expectedEndDate}
                 learning={learning}
                 depleted={depleted}
               />

@@ -25,3 +25,10 @@ The four engine invariants still hold (verified) — net-zero fixed commitment, 
 | N3 | Reconcile could insert an income line duplicating a salary already recorded. | Reconcile preloads existing income keyed by amount + date and skips duplicates (also within the batch). |
 | N2 | Residual accessibility — some 32–36px tap targets; light SR coverage on the hero. | Recent-row + commitments controls and the inline selects raised to 44px (`h-11`/`min-h-11`); the safe-to-spend number now carries an `aria-label`. |
 
+## UI/UX re-audit (v2) — the gauge
+
+| # | Finding | What changed |
+|---|---------|--------------|
+| G1 | **Honesty** — a depleted cycle (pool ≤ 0) fell into the "still learning" branch and was told a comforting lie. | The gauge has a distinct `depleted` branch ("you're at your floor"), derived from the **same** flag the hero computes (`spendablePool <= 0`), so the two can never disagree (`components/runway-gauge.tsx`, `app/today/page.tsx`). |
+| G2 | **Fidelity** — the descent always ran corner-to-corner with the date pinned to the right edge, so urgency was invisible. | The x-axis now maps to the cycle window — **days until the next expected income**, estimated from the user's own pay cadence (`estimateCycleDays`, the median gap between past cycle starts; monthly fallback, clamped to a weekly–quarterly band, tested). The line crosses the floor where it really does: a near crossing reads steep and early, a comfortable one shallow and exits the right edge above the floor. The right edge is labelled `next pay ~<date>` and marked approximate. Vertical scale stays linear and honest. |
+

@@ -20,4 +20,11 @@ describe('buildChatSystemInstruction', () => {
   it('allows general money talk but not reckless advice', () => {
     expect(s.toLowerCase()).toContain('not a licensed advisor');
   });
+
+  it('describes the gated action protocol (log / whatif), confirmed by Dennis', () => {
+    expect(s).toContain('"type":"log"');
+    expect(s).toContain('"type":"whatif"');
+    expect(s.toLowerCase()).toContain('dennis confirms');
+    expect(s.toLowerCase()).toContain('never claim it is saved');
+  });
 });
