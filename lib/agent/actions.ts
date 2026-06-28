@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
-import { getSettings } from '@/lib/cycles';
+import { getSettings, getOpenCycle } from '@/lib/cycles';
 import { performTransition } from '@/lib/cycles/perform-transition';
 import { isCategory, type Category } from '@/lib/categories';
 import { formatZAR } from '@/lib/format';
@@ -12,8 +12,40 @@ import type { FormState } from '@/lib/forms';
 import type { ChatMessage } from '@/lib/analyst/chat-prompt';
 import { extractDocument } from './extract';
 import { decideAskRule, questionFor } from './ask-rule';
+import { merchantsMatch } from './merchant';
+import { checkUpload } from './upload';
 import { onboardingTurn } from './onboarding';
 import type { OnboardingProposal, OnboardingTurn } from './onboarding-prompt';
+
+interface SettleableCommitment {
+  id: string;
+  name: string;
+  amount: number;
+  variable_high: number | null;
+  cadence: string;
+}
+
+const MONTHLY = new Set(['monthly', 'weekly']);
+
+/**
+ * Match an uploaded bill to an active monthly commitment by payee (fuzzy) or by
+ * amount (±10%). Returns the commitment to settle, or null for generic spend.
+ * This is what stops an uploaded rent/insurance receipt from double-counting
+ * (A1): a matched bill settles the commitment instead of adding fresh spend.
+ */
+function matchSettleableCommitment(
+  merchant: string | null,
+  amount: number,
+  commitments: SettleableCommitment[],
+): SettleableCommitment | null {
+  let amountMatch: SettleableCommitment | null = null;
+  for (const c of commitments) {
+    if (merchant && merchantsMatch(merchant, c.name)) return c; // strongest signal
+    const expected = c.variable_high != null ? Number(c.variable_high) : Number(c.amount);
+    if (!amountMatch && Math.abs(expected - amount) <= Math.max(5, expected * 0.1)) amountMatch = c;
+  }
+  return amountMatch;
+}
 
 export type UploadResult =
   | { ok: true; action: 'auto_filed' | 'ask' | 'statement' }
@@ -30,20 +62,32 @@ async function checkIrregular(
   date: string | null,
 ): Promise<{ isDuplicate: boolean; unfamiliar: boolean; anomalous: boolean }> {
   if (!merchant) return { isDuplicate: false, unfamiliar: true, anomalous: false };
-  const { data } = await supabase
-    .from('transactions')
-    .select('amount, logged_at')
-    .eq('merchant', merchant)
-    .limit(50);
-  const rows = (data as { amount: number; logged_at: string }[]) ?? [];
-  const isDuplicate = !!date && rows.some((r) => Math.abs(Number(r.amount) - amount) < 0.01 && r.logged_at.slice(0, 10) === date);
+
+  // A3: match on a NORMALISED/fuzzy payee, not an exact string — so "Uber" and
+  // "UBER *TRIP" are the same payee. We pull a recent window and filter in JS,
+  // and also treat a remembered alias as "familiar".
+  const [{ data: txData }, { data: aliasData }] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select('amount, merchant, logged_at')
+      .not('merchant', 'is', null)
+      .order('logged_at', { ascending: false })
+      .limit(400),
+    supabase.from('merchant_aliases').select('alias'),
+  ]);
+  const all = (txData as { amount: number; merchant: string | null; logged_at: string }[]) ?? [];
+  const rows = all.filter((r) => merchantsMatch(merchant, r.merchant));
+  const aliasFamiliar = ((aliasData as { alias: string }[]) ?? []).some((a) => merchantsMatch(merchant, a.alias));
+
+  const isDuplicate =
+    !!date && rows.some((r) => Math.abs(Number(r.amount) - amount) < 0.01 && r.logged_at.slice(0, 10) === date);
   let anomalous = false;
   if (rows.length >= 3) {
     const amts = rows.map((r) => Number(r.amount)).sort((a, b) => a - b);
     const med = amts[Math.floor(amts.length / 2)];
     anomalous = med > 0 && amount > med * 2.5;
   }
-  return { isDuplicate, unfamiliar: rows.length === 0, anomalous };
+  return { isDuplicate, unfamiliar: rows.length === 0 && !aliasFamiliar, anomalous };
 }
 
 /** Commit a proposal into a real record — the ONLY path that writes money. */
@@ -57,6 +101,8 @@ async function commitFromProposal(
   const dateIso = fields.date ? new Date(fields.date).toISOString() : new Date().toISOString();
   let committedRef: string | null = null;
 
+  const open = await getOpenCycle(supabase);
+
   if (proposal.doc_type === 'payslip') {
     const { data } = await supabase
       .from('income_events')
@@ -66,31 +112,80 @@ async function commitFromProposal(
     const row = data as { id: string; event_at: string } | null;
     if (row) {
       committedRef = row.id;
-      await performTransition(supabase, row);
+      // A2: only transition when this income is NEWER than the open cycle's
+      // start. A historical / back-filled payslip is recorded as confirmed
+      // income but must NOT close-and-open a cycle (that would corrupt the
+      // cycle structure mid-month). With no open cycle yet, the first payslip
+      // legitimately opens one.
+      const isNewer = !open?.start_at || new Date(dateIso).getTime() > new Date(open.start_at).getTime();
+      if (isNewer) await performTransition(supabase, row);
     }
   } else {
     const settings = await getSettings(supabase);
-    const kind =
-      fields.kind === 'lump' || fields.kind === 'commitment'
-        ? fields.kind
-        : amount >= (settings.lump_threshold ?? 1000)
-          ? 'lump'
-          : 'flow';
-    const { data } = await supabase
-      .from('transactions')
-      .insert({
-        raw_text: `Filed ${fields.merchant ?? proposal.doc_type}`,
-        amount,
-        merchant: fields.merchant,
-        category: isCategory(fields.category) ? fields.category : 'other',
-        kind,
-        source: 'import',
-        logged_at: dateIso,
-        is_reconciled: false,
-      })
-      .select('id')
-      .single();
-    committedRef = (data as { id: string } | null)?.id ?? null;
+
+    // A1: does this bill belong to a known monthly commitment? If so, settle the
+    // commitment (kind='commitment' + commitment_id) so the engine nets it to
+    // zero, instead of adding fresh spend on top of the reserve — unless it was
+    // already settled this cycle (reuse the v2 idempotency guard).
+    const { data: commitData } = await supabase
+      .from('commitments')
+      .select('id, name, amount, variable_high, cadence')
+      .eq('is_active', true);
+    const monthly = ((commitData as SettleableCommitment[]) ?? []).filter((c) => MONTHLY.has(c.cadence));
+    const matched = matchSettleableCommitment(fields.merchant, amount, monthly);
+
+    let alreadySettled = false;
+    if (matched && open?.start_at) {
+      const { data: settledRows } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('kind', 'commitment')
+        .eq('commitment_id', matched.id)
+        .gte('logged_at', open.start_at)
+        .limit(1);
+      alreadySettled = ((settledRows as { id: string }[]) ?? []).length > 0;
+    }
+
+    if (matched && !alreadySettled) {
+      const { data } = await supabase
+        .from('transactions')
+        .insert({
+          raw_text: `Filed ${fields.merchant ?? matched.name} (settles ${matched.name})`,
+          amount,
+          merchant: fields.merchant ?? matched.name,
+          category: 'bills',
+          kind: 'commitment',
+          commitment_id: matched.id,
+          source: 'import',
+          logged_at: dateIso,
+          is_reconciled: false,
+        })
+        .select('id')
+        .single();
+      committedRef = (data as { id: string } | null)?.id ?? null;
+    } else {
+      const kind =
+        fields.kind === 'lump' || fields.kind === 'commitment'
+          ? fields.kind
+          : amount >= (settings.lump_threshold ?? 1000)
+            ? 'lump'
+            : 'flow';
+      const { data } = await supabase
+        .from('transactions')
+        .insert({
+          raw_text: `Filed ${fields.merchant ?? proposal.doc_type}`,
+          amount,
+          merchant: fields.merchant,
+          category: isCategory(fields.category) ? fields.category : 'other',
+          kind,
+          source: 'import',
+          logged_at: dateIso,
+          is_reconciled: false,
+        })
+        .select('id')
+        .single();
+      committedRef = (data as { id: string } | null)?.id ?? null;
+    }
   }
 
   await supabase
@@ -112,6 +207,10 @@ export async function uploadDocument(formData: FormData): Promise<UploadResult> 
   // where the owner reviews every line against the statement as the source of
   // truth. Never file it as a single guessed transaction here.
   if (docType === 'statement') return { ok: true, action: 'statement' };
+
+  // A5: bound the upload before we buffer + base64 + ship it to Gemini.
+  const check = checkUpload(file.size, file.type);
+  if (!check.ok) return { ok: false, error: check.error };
 
   const supabase = await createClient();
   const {

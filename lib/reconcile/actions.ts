@@ -8,6 +8,7 @@ import { parseStatementCsv } from './csv';
 import { classifyLine } from './classify';
 import { matchAll } from './match';
 import { extractStatementLines } from './extract';
+import { checkUpload } from '@/lib/agent/upload';
 import type { AnalyzedLine, MatchableLog, StatementLine } from './types';
 
 async function loadUnreconciledLogs(supabase: SupabaseClient): Promise<MatchableLog[]> {
@@ -98,6 +99,7 @@ export async function analyzeReconcile(csv: string): Promise<AnalyzedLine[]> {
 export async function analyzeReconcileDocument(formData: FormData): Promise<AnalyzedLine[]> {
   const file = formData.get('file') as File | null;
   if (!file || file.size === 0) return [];
+  if (!checkUpload(file.size, file.type).ok) return []; // A5: bound the upload
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = file.type || 'application/octet-stream';
   const base64 = Buffer.from(bytes).toString('base64');

@@ -1,4 +1,5 @@
 import type { MatchableLog, StatementLine } from './types';
+import { merchantsMatch } from '@/lib/agent/merchant';
 
 const DAY = 86_400_000;
 
@@ -25,9 +26,16 @@ export function findMatch(
   );
   if (!candidates.length) return null;
 
+  // Merchant hint prefers a candidate whose name appears in the description OR
+  // fuzzily matches it ("UBER *TRIP" ↔ "Uber") — a superset of plain substring,
+  // so dedup survives the bank's name mangling (A3).
+  const hints = (l: MatchableLog) =>
+    l.merchant && (descLower.includes(l.merchant.toLowerCase()) || merchantsMatch(line.description, l.merchant))
+      ? 0
+      : 1;
   candidates.sort((a, b) => {
-    const aHint = a.merchant && descLower.includes(a.merchant.toLowerCase()) ? 0 : 1;
-    const bHint = b.merchant && descLower.includes(b.merchant.toLowerCase()) ? 0 : 1;
+    const aHint = hints(a);
+    const bHint = hints(b);
     if (aHint !== bHint) return aHint - bHint;
     return daysApart(a.logged_at, line.date) - daysApart(b.logged_at, line.date);
   });
