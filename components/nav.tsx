@@ -14,6 +14,7 @@ const I = (d: string) => ({ className }: IconProps) =>
   );
 
 const HomeIcon = I('M3 11l9-8 9 8M5 10v10h14V10');
+const InboxIcon = I('M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8M4 13v6h16v-6');
 const WalletIcon = I('M3 7h18v12H3zM3 7l2-3h12l2 3M16 13h2');
 const ReconcileIcon = I('M4 7h11M4 7l3-3M4 7l3 3M20 17H9M20 17l-3-3M20 17l-3 3');
 const InsightsIcon = I('M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-7');
@@ -29,6 +30,7 @@ interface Group {
 
 const GROUPS: Group[] = [
   { key: 'today', label: 'Today', href: '/today', Icon: HomeIcon, match: (p) => p === '/today' },
+  { key: 'inbox', label: 'Inbox', href: '/inbox', Icon: InboxIcon, match: (p) => p.startsWith('/inbox') },
   {
     key: 'money',
     label: 'Money',
@@ -84,7 +86,7 @@ export function PrimaryNav() {
       </nav>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t bg-background lg:hidden" aria-label="Primary">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-background lg:hidden" aria-label="Primary">
         {GROUPS.map((g) => {
           const active = g.match(pathname);
           return (

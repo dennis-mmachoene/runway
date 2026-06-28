@@ -70,4 +70,44 @@ export interface Settings {
   savings_mode: SavingsMode;
   leftover_mode: LeftoverMode;
   emergency_fund: number;
+  display_name: string;
+}
+
+export type DocumentKind = 'payslip' | 'receipt' | 'invoice' | 'statement' | 'other';
+export type DocumentStatus = 'received' | 'extracted' | 'filed' | 'discarded';
+
+export interface DocumentRow {
+  id: string;
+  user_id: string;
+  kind: DocumentKind;
+  storage_path: string | null;
+  mime: string | null;
+  original_name: string | null;
+  uploaded_at: string;
+  status: DocumentStatus;
+}
+
+export type ProposalStatus = 'pending' | 'auto_filed' | 'confirmed' | 'rejected';
+
+export interface ProposalPayload {
+  amount: number;
+  date: string | null;
+  merchant: string | null;
+  category: Category;
+  kind: TransactionKind;
+  employer?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ExtractionProposal {
+  id: string;
+  user_id: string;
+  document_id: string | null;
+  doc_type: DocumentKind;
+  payload: ProposalPayload;
+  confidence: { amount?: number; date?: number } | null;
+  status: ProposalStatus;
+  committed_ref: string | null;
+  question: string | null;
+  created_at: string;
 }

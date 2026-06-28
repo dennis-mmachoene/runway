@@ -46,6 +46,9 @@ Run **both** migrations in `supabase/migrations/` in order — either:
 - `0002_audit_fixes.sql` — adds `cycles.opening_buffer` + `settings.emergency_fund`
   and the `transition_cycle()` function that closes one cycle and opens the next
   (with sinking accrual/payout and leftover) **atomically**.
+- `0003_agent.sql` — the ingestion agent: `documents` + `extraction_proposals`
+  tables (RLS), `settings.display_name`, and a **private owner-only Storage
+  bucket** (`documents`) with policies. Needed for the Inbox / document upload.
 
 ---
 

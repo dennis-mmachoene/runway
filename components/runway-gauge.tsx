@@ -10,11 +10,14 @@ export function RunwayGauge({
   floor,
   runwayDate,
   learning,
+  depleted = false,
 }: {
   pool: number;
   floor: number;
   runwayDate: string | null;
   learning: boolean;
+  /** Cycle is spent down to (or below) the floor — distinct from "still learning". */
+  depleted?: boolean;
 }) {
   const W = 320;
   const H = 120;
@@ -27,7 +30,7 @@ export function RunwayGauge({
   const yTop = y(total);
   const yFloor = y(floor);
 
-  const descending = !learning && runwayDate != null && pool > 0;
+  const descending = !learning && !depleted && runwayDate != null && pool > 0;
 
   return (
     <svg
@@ -35,13 +38,19 @@ export function RunwayGauge({
       width="100%"
       role="img"
       aria-label={
-        descending
-          ? `Runway: ${formatZAR(pool)} above your floor, descending to it on ${formatDate(runwayDate!)}.`
-          : `Runway: ${formatZAR(pool)} above your floor; still learning your pace.`
+        depleted
+          ? "Runway: you're at your floor — nothing safe to spend."
+          : descending
+            ? `Runway: ${formatZAR(pool)} above your floor, descending to it on ${formatDate(runwayDate!)}.`
+            : `Runway: ${formatZAR(pool)} above your floor; still learning your pace.`
       }
       className="animate-draw"
     >
-      {descending ? (
+      {depleted ? (
+        <text x={(left + right) / 2} y={yFloor - 8} textAnchor="middle" fontSize="10" fill="var(--color-caution)">
+          you&apos;re at your floor
+        </text>
+      ) : descending ? (
         <>
           <polygon
             points={`${left},${yTop} ${right},${yFloor} ${left},${yFloor}`}

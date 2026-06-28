@@ -9,6 +9,7 @@ const SETTINGS_DEFAULTS: Omit<Settings, "user_id"> = {
   savings_mode: "automatic",
   leftover_mode: "sweep_emergency",
   emergency_fund: 0,
+  display_name: "Dennis",
 };
 
 export async function getSettings(

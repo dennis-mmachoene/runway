@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { getSettings } from '@/lib/cycles';
 import { getSafeToSpend } from '@/lib/engine/snapshot';
 import { getPace } from '@/lib/pace/snapshot';
 import { getLastSeen } from '@/lib/diff/last-seen';
@@ -28,6 +29,10 @@ export default async function TodayPage() {
   const lastSeen = await getLastSeen();
   const greeting = buildGreeting(await getDiffSummary(supabase, lastSeen, result));
   const pace = await getPace(supabase);
+  const settings = await getSettings(supabase);
+  const name = settings.display_name || 'Dennis';
+  const hour = new Date().getHours();
+  const hello = hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Evening';
   const { data: txData } = await supabase
     .from('transactions')
     .select('*')
@@ -35,28 +40,34 @@ export default async function TodayPage() {
     .limit(8);
   const transactions = (txData as TransactionRow[]) ?? [];
 
+  const depleted = !!result && result.spendablePool <= 0;
   const learning = !result || result.status === 'learning_pace' || !result.runwayDate;
 
   return (
     <AppShell title="Today">
       {!result ? (
         <EmptyState
-          title="Add your income to begin"
+          title={`Welcome to Runway, ${name}`}
           action={
-            <Button asChild>
-              <Link href="/income">Add income</Link>
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button asChild>
+                <Link href="/onboarding">Set up with the agent</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/income">Add income manually</Link>
+              </Button>
+            </div>
           }
         >
-          A confirmed income event opens your first cycle — then Runway starts drawing the line down
-          to your floor.
+          Let&apos;s build your picture in a quick conversation — or add a confirmed income yourself
+          to open your first cycle.
         </EmptyState>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="flex flex-col gap-3">
             <MarkSeen />
             <div className="flex flex-col gap-1 animate-rise" aria-live="polite">
-              <p className="text-sm text-muted-foreground">{greeting.headline}</p>
+              <p className="text-sm text-muted-foreground">{hello}, {name}.</p>
               <p
                 className="text-5xl font-semibold tracking-tight tabular-nums"
                 aria-label={`Safe to spend ${formatZAR(result.spendablePool)}`}
@@ -64,7 +75,9 @@ export default async function TodayPage() {
                 {formatZAR(result.spendablePool)}
               </p>
               <p className="text-lg font-medium">
-                {learning ? (
+                {depleted ? (
+                  <>You&apos;re at your floor — time to pause.</>
+                ) : learning ? (
                   'Still learning your pace.'
                 ) : (
                   <>
@@ -73,6 +86,7 @@ export default async function TodayPage() {
                   </>
                 )}
               </p>
+              <p className="text-sm text-muted-foreground">{greeting.headline}</p>
               {greeting.notable && <p className="text-sm text-muted-foreground">{greeting.notable}</p>}
               {pace?.message && (
                 <p className={pace.speak ? 'text-sm' : 'text-sm text-muted-foreground'}>{pace.message}</p>
@@ -85,6 +99,7 @@ export default async function TodayPage() {
                 floor={result.floor}
                 runwayDate={result.runwayDate ? result.runwayDate.toISOString() : null}
                 learning={learning}
+                depleted={depleted}
               />
             </div>
 
