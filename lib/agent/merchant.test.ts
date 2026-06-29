@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeMerchant, merchantsMatch } from './merchant';
+import { normalizeMerchant, merchantsMatch, payeeMatchesStrict } from './merchant';
 
 describe('normalizeMerchant', () => {
   it('strips processor suffixes after * or #', () => {
@@ -37,5 +37,29 @@ describe('merchantsMatch', () => {
   it('never matches when either side is blank', () => {
     expect(merchantsMatch('', 'Uber')).toBe(false);
     expect(merchantsMatch('Uber', null)).toBe(false);
+  });
+});
+
+describe('payeeMatchesStrict', () => {
+  it('matches equal or contiguous-phrase names', () => {
+    expect(payeeMatchesStrict('Netflix', 'NETFLIX.COM')).toBe(true);
+    expect(payeeMatchesStrict('Woolworths', 'WOOLWORTHS #4471')).toBe(true);
+    expect(payeeMatchesStrict('Old Mutual', 'Old Mutual Life Assurance')).toBe(true);
+  });
+
+  it('does NOT match on a single shared common word', () => {
+    expect(payeeMatchesStrict('City Lodge', 'City Power')).toBe(false);
+    expect(payeeMatchesStrict('Vodacom Prepaid', 'Vodacom Contract')).toBe(false);
+  });
+
+  it('is stricter than the lenient matcher', () => {
+    // lenient matches on the shared token; strict refuses
+    expect(merchantsMatch('City Lodge', 'City Power')).toBe(true);
+    expect(payeeMatchesStrict('City Lodge', 'City Power')).toBe(false);
+  });
+
+  it('never matches when either side is blank', () => {
+    expect(payeeMatchesStrict('', 'Rent')).toBe(false);
+    expect(payeeMatchesStrict('Rent', null)).toBe(false);
   });
 });

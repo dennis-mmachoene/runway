@@ -45,3 +45,20 @@ export function merchantsMatch(a: string | null | undefined, b: string | null | 
   for (const t of ta) if (tb.has(t)) return true;
   return false;
 }
+
+/**
+ * STRICT payee match (B1). Settling a commitment is a strong claim — "this bill
+ * IS your rent" — so it may NOT rest on a shared common word ("City Lodge" vs
+ * "City Power") or a coincidental amount. Requires equal normalized names, or
+ * one being a contiguous phrase within the other ("Old Mutual" ⊂ "Old Mutual
+ * Life"). Everything looser is left to a question, never an assumption.
+ */
+export function payeeMatchesStrict(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = normalizeMerchant(a);
+  const nb = normalizeMerchant(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const pa = ` ${na} `;
+  const pb = ` ${nb} `;
+  return pa.includes(pb) || pb.includes(pa);
+}

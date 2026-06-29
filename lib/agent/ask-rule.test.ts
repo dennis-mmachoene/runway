@@ -45,4 +45,16 @@ describe('decideAskRule', () => {
   it('money always wins: a large amount asks even if everything else is clean', () => {
     expect(decideAskRule(base({ amount: 5000, amountConfidence: 1, dateConfidence: 1 })).action).toBe('ask');
   });
+
+  it('asks on an ambiguous settlement, ahead of everything else (B1)', () => {
+    // an amount-coincidence with a commitment must surface, never silently file
+    expect(decideAskRule(base({ ambiguousSettlement: true, amount: 8200 }))).toEqual({
+      action: 'ask',
+      reason: 'ambiguous_settlement',
+    });
+    // and it wins even over the large-amount reason, for the clearer question
+    expect(decideAskRule(base({ ambiguousSettlement: true, amount: 50 })).reason).toBe(
+      'ambiguous_settlement',
+    );
+  });
 });

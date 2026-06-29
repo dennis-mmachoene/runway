@@ -15,11 +15,14 @@ export interface AskRuleInput {
   isDuplicate: boolean; // likely duplicate of an existing record
   unfamiliarPayee: boolean; // merchant never seen before
   muchLargerThanUsual: boolean; // anomalous vs this merchant's history
+  /** Amount coincides with a commitment but the payee isn't a strong match (B1). */
+  ambiguousSettlement?: boolean;
 }
 
 export type AskReason =
   | 'large_amount'
   | 'low_confidence'
+  | 'ambiguous_settlement'
   | 'possible_duplicate'
   | 'unfamiliar_payee'
   | 'anomalous_amount'
@@ -32,6 +35,10 @@ export type AskRuleResult = { action: 'auto_file' } | { action: 'ask'; reason: A
  * high confidence, and nothing irregular. Otherwise stop and ask — money first.
  */
 export function decideAskRule(input: AskRuleInput): AskRuleResult {
+  // B1: a bill whose amount coincides with a commitment but whose payee isn't a
+  // strong match must never be silently filed (it could wrongly settle the bill
+  // and overstate). Surface it first, with the clearest possible question.
+  if (input.ambiguousSettlement) return { action: 'ask', reason: 'ambiguous_settlement' };
   if (input.amount > input.lumpThreshold) return { action: 'ask', reason: 'large_amount' };
   if (input.amountConfidence < HIGH_CONFIDENCE || input.dateConfidence < HIGH_CONFIDENCE) {
     return { action: 'ask', reason: 'low_confidence' };
@@ -44,9 +51,16 @@ export function decideAskRule(input: AskRuleInput): AskRuleResult {
 }
 
 /** A specific, one-line question for Dennis — never vague, never alarmist. */
-export function questionFor(reason: AskReason, ctx: { merchant?: string | null; amount: number; formatted: string }): string {
+export function questionFor(
+  reason: AskReason,
+  ctx: { merchant?: string | null; amount: number; formatted: string; commitmentName?: string | null },
+): string {
   const who = ctx.merchant?.trim() || 'this payee';
   switch (reason) {
+    case 'ambiguous_settlement': {
+      const bill = ctx.commitmentName?.trim() || 'one of your bills';
+      return `This ${ctx.formatted} is close to your ${bill}. Is it that bill, or a separate purchase? I'll file it as a separate purchase unless you say it's the bill.`;
+    }
     case 'large_amount':
       return `This ${who} charge is ${ctx.formatted} — real money. File it as is, or adjust?`;
     case 'low_confidence':

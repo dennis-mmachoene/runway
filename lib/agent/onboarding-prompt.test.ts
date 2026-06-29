@@ -26,4 +26,18 @@ describe('buildOnboardingInstruction', () => {
     expect(s).toContain('"proposal"');
     expect(s).toContain('"savingsMode": "automatic"|"best_effort"');
   });
+
+  it('drives document verification and reconciliation', () => {
+    expect(s).toContain('requestDocs');
+    expect(s).toContain('payslips');
+    expect(s).toContain('statements');
+    expect(s.toUpperCase()).toContain('MATCH');
+    expect(s.toUpperCase()).toContain('GAP');
+    expect(s.toUpperCase()).toContain('CONFLICT');
+  });
+
+  it('treats variable pay as windfall, never base', () => {
+    expect(s.toLowerCase()).toContain('windfall');
+    expect(s).toContain('People');
+  });
 });

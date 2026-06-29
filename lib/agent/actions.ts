@@ -11,40 +11,26 @@ import type { DocumentKind, ExtractionProposal, ProposalPayload } from '@/lib/db
 import type { FormState } from '@/lib/forms';
 import type { ChatMessage } from '@/lib/analyst/chat-prompt';
 import { extractDocument } from './extract';
+import { extractStatementLines } from '@/lib/reconcile/extract';
+import { detectSubscriptions, type SubscriptionInput } from '@/lib/subscriptions/detect';
 import { decideAskRule, questionFor } from './ask-rule';
 import { merchantsMatch } from './merchant';
+import { classifyBill, type BillCommitment } from './settlement';
 import { checkUpload } from './upload';
 import { onboardingTurn } from './onboarding';
 import type { OnboardingProposal, OnboardingTurn } from './onboarding-prompt';
 
-interface SettleableCommitment {
-  id: string;
-  name: string;
-  amount: number;
-  variable_high: number | null;
-  cadence: string;
-}
-
 const MONTHLY = new Set(['monthly', 'weekly']);
 
-/**
- * Match an uploaded bill to an active monthly commitment by payee (fuzzy) or by
- * amount (±10%). Returns the commitment to settle, or null for generic spend.
- * This is what stops an uploaded rent/insurance receipt from double-counting
- * (A1): a matched bill settles the commitment instead of adding fresh spend.
- */
-function matchSettleableCommitment(
-  merchant: string | null,
-  amount: number,
-  commitments: SettleableCommitment[],
-): SettleableCommitment | null {
-  let amountMatch: SettleableCommitment | null = null;
-  for (const c of commitments) {
-    if (merchant && merchantsMatch(merchant, c.name)) return c; // strongest signal
-    const expected = c.variable_high != null ? Number(c.variable_high) : Number(c.amount);
-    if (!amountMatch && Math.abs(expected - amount) <= Math.max(5, expected * 0.1)) amountMatch = c;
-  }
-  return amountMatch;
+/** Active monthly/weekly commitments — the bills an uploaded doc could settle. */
+async function loadMonthlyCommitments(supabase: SupabaseClient): Promise<BillCommitment[]> {
+  const { data } = await supabase
+    .from('commitments')
+    .select('id, name, amount, variable_high, cadence')
+    .eq('is_active', true);
+  return ((data as (BillCommitment & { cadence: string })[]) ?? [])
+    .filter((c) => MONTHLY.has(c.cadence))
+    .map(({ id, name, amount, variable_high }) => ({ id, name, amount, variable_high }));
 }
 
 export type UploadResult =
@@ -123,16 +109,13 @@ async function commitFromProposal(
   } else {
     const settings = await getSettings(supabase);
 
-    // A1: does this bill belong to a known monthly commitment? If so, settle the
-    // commitment (kind='commitment' + commitment_id) so the engine nets it to
-    // zero, instead of adding fresh spend on top of the reserve — unless it was
-    // already settled this cycle (reuse the v2 idempotency guard).
-    const { data: commitData } = await supabase
-      .from('commitments')
-      .select('id, name, amount, variable_high, cadence')
-      .eq('is_active', true);
-    const monthly = ((commitData as SettleableCommitment[]) ?? []).filter((c) => MONTHLY.has(c.cadence));
-    const matched = matchSettleableCommitment(fields.merchant, amount, monthly);
+    // A1 + B1: settle a known monthly commitment ONLY on a STRONG payee match
+    // (classifyBill). A mere amount-coincidence never settles here — that would
+    // overstate safe-to-spend silently. Settlement is also idempotent per cycle
+    // (reuse the v2 guard). Anything not a strong match is ordinary spend.
+    const monthly = await loadMonthlyCommitments(supabase);
+    const billMatch = classifyBill(fields.merchant, amount, monthly);
+    const matched = billMatch.kind === 'settle' ? billMatch.commitment : null;
 
     let alreadySettled = false;
     if (matched && open?.start_at) {
@@ -254,6 +237,19 @@ export async function uploadDocument(formData: FormData): Promise<UploadResult> 
 
   const settings = await getSettings(supabase);
   const checks = await checkIrregular(supabase, extraction.payload.merchant, extraction.payload.amount, extraction.payload.date);
+
+  // B1: classify against commitments. A strong payee match will settle on
+  // commit; an amount-coincidence with a weak payee must ASK, never assume.
+  const bill =
+    docType === 'payslip'
+      ? { kind: 'none' as const }
+      : classifyBill(
+          extraction.payload.merchant,
+          extraction.payload.amount,
+          await loadMonthlyCommitments(supabase),
+        );
+  const commitmentName = bill.kind === 'none' ? null : bill.commitment.name;
+
   const decision = decideAskRule({
     amount: extraction.payload.amount,
     amountConfidence: extraction.confidence.amount,
@@ -263,6 +259,7 @@ export async function uploadDocument(formData: FormData): Promise<UploadResult> 
     isDuplicate: checks.isDuplicate,
     unfamiliarPayee: checks.unfamiliar,
     muchLargerThanUsual: checks.anomalous,
+    ambiguousSettlement: bill.kind === 'ask',
   });
 
   const { data: prop } = await supabase
@@ -279,11 +276,16 @@ export async function uploadDocument(formData: FormData): Promise<UploadResult> 
     return { ok: true, action: 'auto_filed' };
   }
 
-  const question = questionFor(decision.reason, {
+  let question = questionFor(decision.reason, {
     merchant: extraction.payload.merchant,
     amount: extraction.payload.amount,
     formatted: formatZAR(extraction.payload.amount),
+    commitmentName,
   });
+  // Transparency: if this WILL settle a bill (strong match), say so on the card.
+  if (bill.kind === 'settle' && decision.reason !== 'ambiguous_settlement') {
+    question += ` I'll log this against your ${bill.commitment.name}.`;
+  }
   await supabase.from('extraction_proposals').update({ question }).eq('id', proposalId);
   revalidatePath('/inbox');
   return { ok: true, action: 'ask' };
@@ -337,8 +339,67 @@ export async function onboardingConverse(messages: ChatMessage[]): Promise<Onboa
   const convo = messages.filter((m) => m.text.trim());
   const firstUser = convo.findIndex((m) => m.role === 'user');
   const c = firstUser >= 0 ? convo.slice(firstUser) : [];
-  if (!c.length) return { reply: 'Tell me about your income to start.', done: false, proposal: null };
+  if (!c.length) return { reply: 'Tell me about your income to start.', done: false, requestDocs: null, proposal: null };
   return onboardingTurn(c, settings.display_name || 'Dennis');
+}
+
+/**
+ * Document verification DURING onboarding — the "truth track". Reads uploaded
+ * payslips or statements and returns a plain-language fact summary to drop back
+ * into the conversation, so the agent reconciles it against what was said. Never
+ * writes anything; onboarding still only persists at confirm.
+ */
+export async function onboardingIngest(formData: FormData): Promise<{ summary: string }> {
+  const which = String(formData.get('which') || '');
+  const files = formData.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length) return { summary: '' };
+
+  const readable = files.filter((f) => checkUpload(f.size, f.type).ok).slice(0, 6); // A5 bound
+  if (!readable.length) return { summary: '[I could not read those files — wrong type or too large.]' };
+
+  const toB64 = async (f: File) => Buffer.from(new Uint8Array(await f.arrayBuffer())).toString('base64');
+
+  if (which === 'payslips') {
+    const reads = await Promise.all(
+      readable.map(async (f) => extractDocument(await toB64(f), f.type || 'application/pdf', 'payslip')),
+    );
+    const ok = reads.filter((r): r is NonNullable<typeof r> => !!r);
+    if (!ok.length) return { summary: '[I could not read those payslips clearly — could you tell me your net pay and pay date?]' };
+    const lines = ok.map(
+      (r) => `net ${formatZAR(r.payload.amount)}${r.payload.date ? ` (paid ${r.payload.date})` : ''}`,
+    );
+    const amounts = ok.map((r) => r.payload.amount);
+    const steady = Math.max(...amounts) - Math.min(...amounts) <= Math.max(50, Math.min(...amounts) * 0.05);
+    return {
+      summary: `[Payslips read — ${ok.length}: ${lines.join('; ')}. Pay looks ${steady ? 'steady' : 'variable'}. Reconcile against what I said and confirm the reliable take-home.]`,
+    };
+  }
+
+  if (which === 'statements') {
+    const debits: SubscriptionInput[] = [];
+    let count = 0;
+    for (const f of readable) {
+      const lines = await extractStatementLines(await toB64(f), f.type || 'application/pdf');
+      if (!lines) continue;
+      count += lines.length;
+      for (const l of lines) {
+        if (l.amount < 0) {
+          debits.push({ merchant: l.description, amount: Math.abs(l.amount), logged_at: l.date, kind: 'flow' });
+        }
+      }
+    }
+    if (!count) return { summary: '[I could not read those statements — could you list your main debit orders?]' };
+    const subs = detectSubscriptions(debits);
+    const recur = subs.length
+      ? ` Recurring charges spotted: ${subs.map((s) => `${s.merchant} ${formatZAR(s.monthlyAmount)}/mo`).join(', ')}.`
+      : '';
+    const debitTotal = debits.reduce((s, l) => s + l.amount, 0);
+    return {
+      summary: `[Statements read — ${count} transactions, ${formatZAR(debitTotal)} out in total.${recur} Reconcile these against the commitments I mentioned: flag anything I forgot (gap) and anything that differs (conflict).]`,
+    };
+  }
+
+  return { summary: '' };
 }
 
 /**
@@ -360,6 +421,7 @@ export async function confirmOnboarding(proposal: OnboardingProposal): Promise<F
     floor_default: proposal.floor,
     savings_mode: proposal.savingsMode,
     display_name: proposal.displayName || 'Dennis',
+    emergency_fund: proposal.emergencyFund ?? 0,
   };
   const { data: existing } = await supabase.from('settings').select('user_id').eq('user_id', user.id).maybeSingle();
   const wrote = existing
@@ -375,7 +437,7 @@ export async function confirmOnboarding(proposal: OnboardingProposal): Promise<F
       due_day: c.dueDay,
       type: c.type,
     })),
-    // subscriptions → monthly commitments (recurring, known)
+    // subscriptions → monthly commitments (recurring, known) — A4's single home
     ...proposal.subscriptions.map((s) => ({
       name: s.merchant,
       amount: s.amount,
@@ -383,6 +445,16 @@ export async function confirmOnboarding(proposal: OnboardingProposal): Promise<F
       due_day: null,
       type: 'fixed' as const,
     })),
+    // ongoing family support is a spoken-for monthly outflow → a commitment too
+    ...proposal.dependents
+      .filter((d) => d.ongoing)
+      .map((d) => ({
+        name: `Support: ${d.description}`,
+        amount: d.amount,
+        cadence: 'monthly' as const,
+        due_day: null,
+        type: 'fixed' as const,
+      })),
   ];
   if (commitmentRows.length) {
     const { error } = await supabase.from('commitments').insert(commitmentRows);

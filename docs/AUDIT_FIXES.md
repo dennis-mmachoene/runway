@@ -44,3 +44,13 @@ The four engine invariants still hold (verified) — net-zero fixed commitment, 
 
 > A6 (gauge G2) from this report was already resolved — see the UI/UX v2 section above.
 
+## Build audit — agent phase, 2nd pass (A2.0)
+
+Verified A1–A5 closed. One edge the A1 fix introduced:
+
+| # | Sev | Finding | What changed |
+|---|-----|---------|--------------|
+| B1 | P1 | The A1 settlement match fell back to amount-only (±10%) with a lenient payee matcher, so a coincidence (R8,200 furniture vs R8,000 rent) could silently *settle* the commitment and **overstate** safe-to-spend, corrupting the bill's paid-state. | Settlement now requires a STRONG payee match: new pure `payeeMatchesStrict` (equal or contiguous-phrase, never a shared common word) + `classifyBill` → `settle` \| `ask` \| `none` (tested). `commitFromProposal` settles only on `settle`; everything else is ordinary spend, so a coincidence can never overstate. An amount-coincidence with a weak payee now triggers the ask-rule's new `ambiguous_settlement` reason — "Is this R8,200 your rent, or a separate purchase?" — and defaults to a separate purchase unless Dennis says otherwise. When a strong match *will* settle, the confirm card says so ("I'll log this against your <bill>"). |
+
+> A6/G2 carried in this report was already done (UI/UX v2).
+
