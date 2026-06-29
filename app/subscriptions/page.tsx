@@ -61,13 +61,13 @@ export default async function SubscriptionsPage() {
               return (
                 <Card key={s.merchant}>
                   <CardContent className="flex items-center justify-between gap-3 p-4">
-                    <div>
-                      <p className="font-medium">{s.merchant}</p>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{s.merchant}</p>
                       <p className="text-xs text-muted-foreground">
                         seen {s.count}× · last {formatDate(s.lastChargedAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-3">
                       <div className="text-right">
                         <p className="font-medium">
                           <Money amount={s.monthlyAmount} />/mo

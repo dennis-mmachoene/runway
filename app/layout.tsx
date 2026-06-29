@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Sans } from 'next/font/google';
 import './globals.css';
 
@@ -10,7 +10,17 @@ const sans = IBM_Plex_Sans({
 
 export const metadata: Metadata = {
   title: 'Runway',
-  description: '',
+  description: 'Your honest safe-to-spend.',
+};
+
+// Explicit mobile viewport — scales correctly on phones, allows pinch-zoom.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
+  ],
 };
 
 // Apply the saved theme before paint to avoid a flash.
