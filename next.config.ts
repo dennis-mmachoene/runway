@@ -8,9 +8,14 @@ import type { NextConfig } from "next";
 //  - *.supabase.co in connect-src/img-src: browser auth + private-bucket signed
 //    URLs (the inbox document thumbnails) come from Supabase.
 // Gemini runs only in server actions, so it needs no browser connect-src entry.
+// React's dev build uses eval() for debugging (never in production), so allow
+// 'unsafe-eval' in development only — production CSP stays strict.
+const isDev = process.env.NODE_ENV !== 'production';
+const scriptSrc = `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`;
+
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  scriptSrc,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.supabase.co",
   "font-src 'self'",
