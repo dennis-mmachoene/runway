@@ -54,3 +54,15 @@ Verified A1–A5 closed. One edge the A1 fix introduced:
 
 > A6/G2 carried in this report was already done (UI/UX v2).
 
+## Agent audit 3 (A3.0) + Security audit (S1.0)
+
+A3.0 verified B1 and the onboarding build as closed; one cleanup remained. The security audit found the architecture sound (real mandatory TOTP, owner-only sign-in, RLS everywhere, the service-role key server-only/off the request path, bounded gated uploads) with header hardening outstanding.
+
+| # | Sev | Finding | What changed |
+|---|-----|---------|--------------|
+| O1 | P2 | `confirmOnboarding` wasn't idempotent — re-running onboarding would re-insert commitments and open a second cycle. | `/onboarding` now redirects to `/today` when a cycle already exists, and `confirmOnboarding` refuses when one is open (defense in depth). First-run only. |
+| S1 | P2 | `next.config.ts` was empty — no HSTS/CSP/X-Frame-Options/etc. | Added the full header set via `headers()`: HSTS (preload), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, and an app-aware CSP (`frame-ancestors 'none'`, Supabase allowed for auth + signed-URL thumbnails; `'unsafe-inline'` kept for Next hydration + the no-flash theme script). |
+| S3 | Low | A malicious uploaded document could embed text aiming to steer the extractor. | Already contained (enum-validated parsing + human confirm). Hardened anyway: both extractors are now told to treat all document text as DATA, never instructions. |
+
+> S2 (app-level brute-force throttling) is accepted as-is — mandatory TOTP means a password alone can't get in; proxy/host throttling is the deployment-layer defence-in-depth. The deployment boundary (HTTPS/TLS, locking the Supabase project, secrets in host env, patching, host hardening) is the owner's half and can't be set from the app code. A6/G2 was already resolved (UI/UX v2).
+

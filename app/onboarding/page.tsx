@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { getOpenCycle } from '@/lib/cycles';
 import { OnboardingClient } from './onboarding-client';
 
 export default async function OnboardingPage() {
@@ -8,6 +9,11 @@ export default async function OnboardingPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect('/');
+
+  // O1: onboarding is first-run only. Once a cycle exists, re-running it would
+  // double-insert commitments and open a second cycle — so send them home.
+  const open = await getOpenCycle(supabase);
+  if (open) redirect('/today');
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-6">

@@ -417,6 +417,11 @@ export async function confirmOnboarding(proposal: OnboardingProposal): Promise<F
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: 'Not signed in.' };
 
+  // O1: idempotency guard — never run onboarding twice. If a cycle is already
+  // open, the profile exists; appending again would double-count and re-open.
+  const alreadyOpen = await getOpenCycle(supabase);
+  if (alreadyOpen) return { ok: false, error: "You're already set up — nothing to redo." };
+
   const patch = {
     floor_default: proposal.floor,
     savings_mode: proposal.savingsMode,
