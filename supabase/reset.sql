@@ -6,8 +6,15 @@
 -- ⚠️  DESTRUCTIVE. There is no undo. Intended for a single-user instance you
 --     want to start fresh — NOT for live data you need to keep.
 --
--- HOW TO RUN: paste into the Supabase SQL Editor for the CORRECT project and
--- run. Confirm the project name in the dashboard header before executing.
+-- HOW TO RUN:
+--   1) Paste this into the Supabase SQL Editor for the CORRECT project and run
+--      (confirm the project name in the dashboard header first). This clears the
+--      data tables.
+--   2) Empty the 'documents' bucket separately — Supabase blocks deleting
+--      storage.objects directly from SQL ("Direct deletion from storage tables
+--      is not allowed; use the Storage API"). Run `npm run reset:storage`
+--      (scripts/reset-storage.ts) OR delete the files in the dashboard:
+--      Storage → documents → select all → delete.
 --
 -- Does NOT touch: tables/migrations (schema) or auth.users (the owner login).
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -27,10 +34,11 @@ truncate table
   settings
 restart identity cascade;
 
--- Empty the private 'documents' storage bucket (the stored originals).
-delete from storage.objects where bucket_id = 'documents';
-
 commit;
+
+-- NOTE: the 'documents' storage bucket is emptied by `npm run reset:storage`
+-- (see step 2 above) — NOT here, because direct SQL deletes on storage.objects
+-- are blocked by Supabase.
 
 -- ─── Verify (optional): every count below should be 0 ────────────────────────
 -- select

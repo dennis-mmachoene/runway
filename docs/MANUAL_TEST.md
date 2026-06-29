@@ -5,7 +5,8 @@ Each check has **Steps**, **Expected**, and a **Result** box — tick `[x]` pass
 write what went wrong.
 
 **Before you start**
-- [ ] Reset done — ran `supabase/reset.sql` against the correct project.
+- [ ] Reset done — ran `supabase/reset.sql` (clears tables) **and** `npm run
+      reset:storage` (empties the documents bucket) against the correct project.
 - [ ] You can sign in (password + TOTP) as the owner.
 - [ ] Documents ready: 3 consecutive payslips (e.g. Apr/May/Jun), a 3-month bank
       statement (PDF), and a few receipts (a shop receipt, an e-hailing receipt,
@@ -19,7 +20,7 @@ under your lump threshold (default R1 000), "large" means above it.
 
 ## 0. Clean slate
 
-**Steps:** Run the reset SQL, then sign in.
+**Steps:** Run the reset SQL and `npm run reset:storage`, then sign in.
 **Expected:** You land on a fresh state — Today shows the welcome / empty state
 ("Set up with the agent" + "Add income manually"), no number, no transactions;
 Inbox is empty; Subscriptions/Commitments empty.
@@ -269,4 +270,5 @@ Inbox, Reconcile, Subscriptions, Chat, Onboarding.
 - **Duplicate / unfamiliar / anomalous asks:** upload the same receipt twice
   (duplicate), a brand-new merchant (unfamiliar), or a charge 3× a merchant's
   usual (anomalous) — each should trigger a specific question.
-- **Reset and repeat:** re-run `supabase/reset.sql` any time to start over.
+- **Reset and repeat:** re-run `supabase/reset.sql` + `npm run reset:storage` any
+  time to start over.

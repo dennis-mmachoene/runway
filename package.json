@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed:owner": "tsx scripts/seed-owner.ts",
+    "reset:storage": "tsx scripts/reset-storage.ts",
     "test": "vitest run"
   },
   "dependencies": {
